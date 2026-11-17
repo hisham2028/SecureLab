@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.6-alpine
+        env:
+          POSTGRES_USER: securelab
+          POSTGRES_PASSWORD: securelab
+          POSTGRES_DB: securelab_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U securelab"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://securelab:securelab@localhost:5432/securelab_test?schema=public
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      JUDGE0_URL: http://localhost:2358
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm --filter @securelab/shared build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm --filter @securelab/api exec prisma migrate deploy
+      - run: pnpm test
+      - run: pnpm build
+
+  # Builds the Windows installer on the target OS so packaging breakage shows up early.
+  package-windows:
+    runs-on: windows-2022
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @securelab/student package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: securelab-student-windows
+          path: apps/student/release/*.exe
+          retention-days: 7

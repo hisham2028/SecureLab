@@ -1,0 +1,60 @@
+# Local development stack. Not a production deployment.
+#
+# Judge0 runs untrusted code, so it lives in its own containers with its own database and
+# Redis, separate from SecureLab's. Judge0 CE 1.13.x uses isolate, which needs a privileged
+# container and a host with cgroup v1 (or a cgroup v2 host booted with
+# systemd.unified_cgroup_hierarchy=0). See docs/adr/0003-execution-judge0.md.
+name: securelab
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: securelab
+      POSTGRES_PASSWORD: securelab
+      POSTGRES_DB: securelab
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securelab"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    ports: ["127.0.0.1:6379:6379"]
+
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    privileged: true
+    env_file: judge0.env
+    ports: ["127.0.0.1:2358:2358"]
+    depends_on: [judge0-db, judge0-redis]
+    networks: [default, judge0]
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    privileged: true
+    env_file: judge0.env
+    depends_on: [judge0-db, judge0-redis]
+    networks: [judge0]
+
+  judge0-db:
+    image: postgres:16.6-alpine
+    env_file: judge0.env
+    volumes: [judge0-pgdata:/var/lib/postgresql/data]
+    networks: [judge0]
+
+  judge0-redis:
+    image: redis:7.4-alpine
+    command: ["sh", "-c", 'redis-server --appendonly no --requirepass "$$REDIS_PASSWORD"']
+    env_file: judge0.env
+    networks: [judge0]
+
+networks:
+  judge0: {}
+
+volumes:
+  pgdata: {}
+  judge0-pgdata: {}

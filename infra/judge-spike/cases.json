@@ -1,0 +1,74 @@
+[
+  {
+    "name": "c: correct answer",
+    "language": "c",
+    "expect": ["ACCEPTED"],
+    "stdin": "2 3\n",
+    "expectedOutput": "5\n",
+    "source": "#include <stdio.h>\nint main(void){int a,b;scanf(\"%d %d\",&a,&b);printf(\"%d\\n\",a+b);return 0;}\n"
+  },
+  {
+    "name": "cpp: wrong answer",
+    "language": "cpp",
+    "expect": ["WRONG_ANSWER"],
+    "stdin": "2 3\n",
+    "expectedOutput": "5\n",
+    "source": "#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a-b<<\"\\n\";}\n"
+  },
+  {
+    "name": "c: compile error",
+    "language": "c",
+    "expect": ["COMPILE_ERROR"],
+    "stdin": "",
+    "source": "int main(void){ return }\n"
+  },
+  {
+    "name": "python: infinite loop",
+    "language": "python",
+    "expect": ["TIME_LIMIT_EXCEEDED"],
+    "stdin": "",
+    "source": "while True:\n    pass\n"
+  },
+  {
+    "name": "cpp: memory bomb",
+    "language": "cpp",
+    "expect": ["MEMORY_LIMIT_EXCEEDED", "RUNTIME_ERROR"],
+    "stdin": "",
+    "source": "#include <vector>\n#include <cstdio>\nint main(){std::vector<char*> v;for(;;){char*p=new char[1<<20];for(int i=0;i<(1<<20);i+=4096)p[i]=1;v.push_back(p);}}\n"
+  },
+  {
+    "name": "c: fork bomb",
+    "language": "c",
+    "expect": ["TIME_LIMIT_EXCEEDED", "RUNTIME_ERROR", "ACCEPTED"],
+    "stdin": "",
+    "source": "#include <unistd.h>\nint main(void){for(;;)fork();}\n"
+  },
+  {
+    "name": "python: read secrets from the judge host",
+    "language": "python",
+    "expect": ["ACCEPTED", "RUNTIME_ERROR"],
+    "stdin": "",
+    "mustNotContain": [
+      "POSTGRES_PASSWORD",
+      "REDIS_PASSWORD",
+      "AUTHN_TOKEN",
+      "judge0-local-dev-only"
+    ],
+    "source": "import os\nfor p in ['/etc/passwd','/proc/1/environ','/api/.env']:\n    try:\n        print(open(p).read()[:200])\n    except Exception as e:\n        print('blocked', p, type(e).__name__)\nprint(dict(os.environ))\n"
+  },
+  {
+    "name": "python: network access",
+    "language": "python",
+    "expect": ["ACCEPTED", "RUNTIME_ERROR"],
+    "stdin": "",
+    "mustNotContain": ["NETWORK_OK"],
+    "source": "import socket\ntry:\n    socket.create_connection(('1.1.1.1', 80), timeout=3)\n    print('NETWORK_OK')\nexcept Exception as e:\n    print('blocked', type(e).__name__)\n"
+  },
+  {
+    "name": "c: huge output",
+    "language": "c",
+    "expect": ["RUNTIME_ERROR", "TIME_LIMIT_EXCEEDED", "ACCEPTED"],
+    "stdin": "",
+    "source": "#include <stdio.h>\nint main(void){for(;;)puts(\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\");}\n"
+  }
+]
