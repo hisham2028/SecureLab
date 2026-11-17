@@ -14,6 +14,7 @@ const ExamConfigFields = {
   allowedLanguages: z.array(LanguageSchema).min(1).max(3),
   navigationPolicy: z.enum(["FREE", "SEQUENTIAL"]),
   maxSubmissionsPerQuestion: z.number().int().min(1).max(100),
+  showSubmissionVerdicts: z.boolean(),
   aiMode: z.enum(["DISABLED", "HINTS_ONLY", "FULL"]),
 };
 
@@ -28,6 +29,7 @@ export const CreateExamSchema = z.object({
   allowedLanguages: ExamConfigFields.allowedLanguages,
   navigationPolicy: ExamConfigFields.navigationPolicy.default("FREE"),
   maxSubmissionsPerQuestion: ExamConfigFields.maxSubmissionsPerQuestion.default(10),
+  showSubmissionVerdicts: ExamConfigFields.showSubmissionVerdicts.default(false),
   aiMode: ExamConfigFields.aiMode.default("DISABLED"),
 });
 export type CreateExamDto = z.infer<typeof CreateExamSchema>;

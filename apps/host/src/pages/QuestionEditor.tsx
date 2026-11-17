@@ -17,6 +17,8 @@ const BLANK: QuestionContent = {
   difficulty: "MEDIUM",
   tags: [],
   aiMode: "DISABLED",
+  comparisonMode: "WHITESPACE",
+  scoringMode: "WEIGHTED",
   testCases: [
     { isHidden: false, input: "", expectedOutput: "", weight: 0 },
     { isHidden: true, input: "", expectedOutput: "", weight: 1 },
@@ -37,6 +39,8 @@ function toContent(v: QuestionVersion): QuestionContent {
     difficulty: v.difficulty,
     tags: v.tags,
     aiMode: v.aiMode,
+    comparisonMode: v.comparisonMode,
+    scoringMode: v.scoringMode,
     testCases: v.testCases.map(({ isHidden, input, expectedOutput, weight }) => ({
       isHidden,
       input,
@@ -293,11 +297,38 @@ export function QuestionEditor({ id }: { id?: string }) {
           </Field>
         </div>
 
+        <div className="row">
+          <Field
+            label="Output check"
+            hint="How a program's output is compared with the expected output."
+          >
+            <select
+              value={c.comparisonMode}
+              onChange={(e) =>
+                set("comparisonMode", e.target.value as QuestionContent["comparisonMode"])
+              }
+            >
+              <option value="WHITESPACE">Ignore trailing spaces and blank lines</option>
+              <option value="EXACT">Exact match</option>
+            </select>
+          </Field>
+          <Field label="Scoring" hint="Applies to hidden tests.">
+            <select
+              value={c.scoringMode}
+              onChange={(e) => set("scoringMode", e.target.value as QuestionContent["scoringMode"])}
+            >
+              <option value="WEIGHTED">Partial marks by test weight</option>
+              <option value="ALL_OR_NOTHING">All tests must pass</option>
+            </select>
+          </Field>
+        </div>
+
         <fieldset className="fieldset">
           <legend>Test cases</legend>
           <p className="field-hint">
             Samples are shown to students. Hidden tests are used for marking and never leave the
-            server. Score = sum of weights of passed hidden tests.
+            server. With partial marks, a question's points are shared by the weights of its hidden
+            tests (if every weight is 0, each test counts equally).
           </p>
           {show("tests") && <span className="field-error">{errors.tests}</span>}
           <ol className="tests">

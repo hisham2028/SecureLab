@@ -1,4 +1,4 @@
-import type { Language, Verdict } from "@securelab/shared";
+import type { Language, SubmissionStatus, Verdict } from "@securelab/shared";
 
 export const LANGUAGE_LABEL: Record<Language, string> = {
   c: "C",
@@ -24,18 +24,21 @@ export const RUN_LABEL: Record<Verdict, string> = {
   TIME_LIMIT_EXCEEDED: "Took too long",
   MEMORY_LIMIT_EXCEEDED: "Used too much memory",
   INTERNAL_ERROR: "The judge had a problem. Try again.",
+  PARTIAL: "Finished",
 };
 
-export const SUBMISSION_LABEL: Record<Verdict, string> = {
+export const SUBMISSION_LABEL: Record<SubmissionStatus, string> = {
   QUEUED: "Received, waiting for grading",
   RUNNING: "Being graded",
+  GRADED: "Graded",
+  PARTIAL: "Some tests passed",
   ACCEPTED: "Accepted",
   WRONG_ANSWER: "Wrong answer",
   COMPILE_ERROR: "Compile error",
   RUNTIME_ERROR: "Runtime error",
   TIME_LIMIT_EXCEEDED: "Time limit exceeded",
   MEMORY_LIMIT_EXCEEDED: "Memory limit exceeded",
-  INTERNAL_ERROR: "Grading problem",
+  INTERNAL_ERROR: "Grading problem on our side (not your code). The invigilator can re-run it.",
 };
 
 export const timeOf = (iso: string | null) =>

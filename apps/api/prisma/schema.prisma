@@ -95,6 +95,22 @@ enum NavigationPolicy {
   SEQUENTIAL
 }
 
+/// How a program's output is compared with a test's expected output.
+enum ComparisonMode {
+  /// Byte-for-byte after normalizing line endings.
+  EXACT
+  /// Ignores trailing spaces on each line and trailing blank lines.
+  WHITESPACE
+}
+
+/// How passed tests turn into a question score.
+enum ScoringMode {
+  /// Points in proportion to the weight of passed tests.
+  WEIGHTED
+  /// Full points only when every test passes.
+  ALL_OR_NOTHING
+}
+
 enum Difficulty {
   EASY
   MEDIUM
@@ -121,6 +137,9 @@ model Exam {
   allowedLanguages          Language[]         @map("allowed_languages")
   navigationPolicy          NavigationPolicy   @default(FREE) @map("navigation_policy")
   maxSubmissionsPerQuestion Int                @default(10) @map("max_submissions_per_question")
+  /// When true, students see each submission's verdict and passed-test count during the exam.
+  /// Scores are never shown before results are published.
+  showSubmissionVerdicts    Boolean            @default(false) @map("show_submission_verdicts")
   /// Upper bound for AI help in this exam; a question can only be stricter.
   aiMode                    AiMode             @default(DISABLED) @map("ai_mode")
   /// Server-authoritative timing. All times are server clock.
@@ -173,6 +192,8 @@ model QuestionVersion {
   difficulty       Difficulty     @default(MEDIUM)
   tags             String[]
   aiMode           AiMode         @default(DISABLED) @map("ai_mode")
+  comparisonMode   ComparisonMode @default(WHITESPACE) @map("comparison_mode")
+  scoringMode      ScoringMode    @default(WEIGHTED) @map("scoring_mode")
   createdById      String         @map("created_by_id") @db.Uuid
   createdAt        DateTime       @default(now()) @map("created_at")
   testCases        TestCase[]
@@ -285,6 +306,8 @@ enum SubmissionStatus {
   TIME_LIMIT_EXCEEDED
   MEMORY_LIMIT_EXCEEDED
   INTERNAL_ERROR
+  /// Some hidden tests passed.
+  PARTIAL
 }
 
 /// An accepted, immutable snapshot of a student's answer. Only `status` may change later
@@ -303,10 +326,93 @@ model Submission {
   code               String
   codeSha256         String           @map("code_sha256")
   status             SubmissionStatus @default(QUEUED)
+  /// Filled in by grading. Score is out of the exam question's points.
+  score              Decimal?         @db.Decimal(8, 2)
+  maxScore           Int?             @map("max_score")
+  testsPassed        Int?             @map("tests_passed")
+  testsTotal         Int?             @map("tests_total")
+  gradedAt           DateTime?        @map("graded_at")
   createdAt          DateTime         @default(now()) @map("created_at")
+  job                JudgeJob?
+  evaluations        Evaluation[]
 
   @@unique([registrationId, examQuestionId, sequence])
   @@unique([registrationId, clientSubmissionId])
   @@index([examQuestionId])
   @@map("submissions")
+}
+
+enum JudgeJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  /// Gave up after repeated infrastructure failures; a host can queue it again.
+  FAILED
+}
+
+/// Durable grading queue, one job per submission. Workers claim jobs with
+/// SELECT … FOR UPDATE SKIP LOCKED and a lease, so a crashed worker's job is picked up again.
+model JudgeJob {
+  id           String         @id @default(uuid()) @db.Uuid
+  submissionId String         @unique @map("submission_id") @db.Uuid
+  submission   Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  status       JudgeJobStatus @default(QUEUED)
+  attempts     Int            @default(0)
+  runAfter     DateTime       @default(now()) @map("run_after")
+  lockedAt     DateTime?      @map("locked_at")
+  lockedBy     String?        @map("locked_by")
+  lastError    String?        @map("last_error")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, runAfter])
+  @@map("judge_jobs")
+}
+
+enum EvaluationOutcome {
+  COMPLETED
+  /// The judge itself failed (not the student's code). Retried; never turned into a mark.
+  INFRA_ERROR
+}
+
+/// One grading attempt of one submission. Append-only. At most one COMPLETED per submission.
+model Evaluation {
+  id            String            @id @default(uuid()) @db.Uuid
+  submissionId  String            @map("submission_id") @db.Uuid
+  submission    Submission        @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  attempt       Int
+  outcome       EvaluationOutcome
+  verdict       SubmissionStatus?
+  score         Decimal?          @db.Decimal(8, 2)
+  maxScore      Int               @map("max_score")
+  testsPassed   Int               @default(0) @map("tests_passed")
+  testsTotal    Int               @default(0) @map("tests_total")
+  compileOutput String            @default("") @map("compile_output")
+  /// Provider, version, language ID, limits, comparison and scoring mode used. Enough to re-run.
+  settings      Json
+  error         String?
+  workerId      String            @map("worker_id")
+  startedAt     DateTime          @map("started_at")
+  finishedAt    DateTime          @default(now()) @map("finished_at")
+  tests         EvaluationTest[]
+
+  @@unique([submissionId, attempt])
+  @@map("evaluations")
+}
+
+/// Per-test result. Holds verdicts and resource use only, never the program's output.
+model EvaluationTest {
+  id           String           @id @default(uuid()) @db.Uuid
+  evaluationId String           @map("evaluation_id") @db.Uuid
+  evaluation   Evaluation       @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  testCaseId   String           @map("test_case_id") @db.Uuid
+  ordinal      Int
+  weight       Int
+  verdict      SubmissionStatus
+  passed       Boolean
+  timeSeconds  Float?           @map("time_seconds")
+  memoryKb     Int?             @map("memory_kb")
+
+  @@unique([evaluationId, ordinal])
+  @@map("evaluation_tests")
 }

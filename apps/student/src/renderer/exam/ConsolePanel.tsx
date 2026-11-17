@@ -1,5 +1,5 @@
 import { useEffect, useId } from "react";
-import { isFinalVerdict, type RunResult, type SubmissionSummary } from "@securelab/shared";
+import type { RunResult, SubmissionSummary } from "@securelab/shared";
 import { api, ApiError } from "../lib/api";
 import { LANGUAGE_LABEL, RUN_LABEL, SUBMISSION_LABEL, timeOf } from "../lib/labels";
 
@@ -21,7 +21,8 @@ interface Props {
 
 export function ConsolePanel(p: Props) {
   const inputId = useId();
-  const hasPending = p.submissions?.some((s) => !isFinalVerdict(s.status)) ?? false;
+  const hasPending =
+    p.submissions?.some((s) => !s.graded && s.status !== "INTERNAL_ERROR") ?? false;
 
   // Status updates for submissions waiting to be graded.
   const { questionId, onSubmissions, tab } = p;
@@ -124,7 +125,15 @@ export function ConsolePanel(p: Props) {
                     <td>{s.sequence}</td>
                     <td>{LANGUAGE_LABEL[s.language]}</td>
                     <td>{timeOf(s.createdAt)}</td>
-                    <td>{SUBMISSION_LABEL[s.status]}</td>
+                    <td>
+                      {SUBMISSION_LABEL[s.status]}
+                      {s.testsTotal !== undefined && (
+                        <span className="muted">
+                          {" "}
+                          · {s.testsPassed}/{s.testsTotal} tests
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <button type="button" className="small" onClick={() => p.onView(s.id)}>
                         View code

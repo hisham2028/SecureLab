@@ -17,6 +17,8 @@ export const Verdict = {
   TimeLimit: "TIME_LIMIT_EXCEEDED",
   MemoryLimit: "MEMORY_LIMIT_EXCEEDED",
   InternalError: "INTERNAL_ERROR",
+  /** Some, but not all, hidden tests passed. */
+  Partial: "PARTIAL",
 } as const;
 export type Verdict = (typeof Verdict)[keyof typeof Verdict];
 

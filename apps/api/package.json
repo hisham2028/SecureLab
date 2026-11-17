@@ -5,6 +5,7 @@
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
+    "worker": "node dist/worker.js",
     "dev": "tsc -p tsconfig.build.json --watch & node --watch dist/main.js",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "lint": "eslint src test",

@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: ExamSettings = {
   allowedLanguages: ["c", "cpp", "python"],
   navigationPolicy: "FREE",
   maxSubmissionsPerQuestion: 10,
+  showSubmissionVerdicts: false,
   aiMode: "DISABLED",
 };
 
@@ -201,6 +202,17 @@ export function ExamSettingsForm({ formId, initial, idRuleLocked, onSubmit, onDi
             onChange={(e) => set("allowEarlySubmit", e.target.checked)}
           />
           Students can finish early
+        </label>
+        <label className="check check-field">
+          <input
+            type="checkbox"
+            checked={s.showSubmissionVerdicts}
+            onChange={(e) => set("showSubmissionVerdicts", e.target.checked)}
+          />
+          Show verdicts during the exam
+          <span className="field-hint">
+            Students see “Accepted”, “Wrong answer” and how many hidden tests passed. Never scores.
+          </span>
         </label>
       </div>
 
