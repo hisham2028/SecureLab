@@ -7,3 +7,9 @@ release/
 !.env.example
 *.log
 .DS_Store
+
+# This repo uses pnpm only (see package.json "packageManager").
+package-lock.json
+yarn.lock
+bun.lockb
+bun.lock

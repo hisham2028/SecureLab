@@ -15,7 +15,9 @@ student desktop client and the execution (judge) integration.
 
 ## Getting started
 
-Requires Node 22, pnpm 10 and Docker.
+Requires Node 22, pnpm 10 and Docker. **Use pnpm only** (not npm or yarn): the repo pins it in
+`package.json` and `pnpm-lock.yaml` is the only lockfile. Run `corepack enable` once and pnpm is
+picked up automatically. In GitHub Codespaces the dev container does this for you.
 
 ```sh
 pnpm install
