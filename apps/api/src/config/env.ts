@@ -9,6 +9,13 @@ const EnvSchema = z.object({
   JUDGE0_URL: z.string().url(),
   JUDGE0_AUTH_TOKEN: z.string().optional().default(""),
   CORS_ORIGINS: z.string().default(""),
+  /** Submissions graded at the same time by one worker process. */
+  JUDGE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  /** Development convenience: also run a grading worker inside the API process. */
+  JUDGE_WORKER_IN_API: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 export type Env = z.infer<typeof EnvSchema>;
 

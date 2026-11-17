@@ -25,6 +25,8 @@ export const QuestionContentSchema = z
     difficulty: z.enum(["EASY", "MEDIUM", "HARD"]).default("MEDIUM"),
     tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
     aiMode: z.enum(["DISABLED", "HINTS_ONLY", "FULL"]).default("DISABLED"),
+    comparisonMode: z.enum(["EXACT", "WHITESPACE"]).default("WHITESPACE"),
+    scoringMode: z.enum(["WEIGHTED", "ALL_OR_NOTHING"]).default("WEIGHTED"),
     testCases: z.array(TestCaseInputSchema).min(1).max(100),
   })
   .transform((q) => ({

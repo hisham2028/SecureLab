@@ -99,7 +99,12 @@ export interface RunResult {
   truncated: boolean;
 }
 
-export type SubmissionStatus = Verdict;
+/**
+ * What a student sees for a submission. "GRADED" hides the verdict when the exam doesn't show
+ * verdicts during the exam. INTERNAL_ERROR means the judge failed; it is retried and never marks
+ * the student down.
+ */
+export type SubmissionStatus = Verdict | "GRADED";
 
 export interface SubmissionSummary {
   id: string;
@@ -107,6 +112,11 @@ export interface SubmissionSummary {
   sequence: number;
   language: Language;
   status: SubmissionStatus;
+  /** Shown only when the exam shows verdicts. */
+  testsPassed?: number;
+  testsTotal?: number;
+  /** Set when grading of this submission is finished (whatever the verdict). */
+  graded: boolean;
   codeSha256: string;
   createdAt: string;
 }

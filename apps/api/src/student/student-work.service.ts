@@ -174,20 +174,37 @@ export class StudentWorkService {
 
   // ---- Submissions ------------------------------------------------------------------------------
 
-  private summary(s: Submission): SubmissionSummary {
+  /**
+   * What the student may see about a submission. Scores never; verdicts and passed-test counts
+   * only when the exam shows them. Judge problems are always shown as such, so a student isn't
+   * left thinking their code failed.
+   */
+  private summary(s: Submission, showVerdicts: boolean): SubmissionSummary {
+    const graded = s.gradedAt !== null;
+    const status: SubmissionSummary["status"] = graded
+      ? showVerdicts
+        ? s.status
+        : "GRADED"
+      : s.status === "RUNNING" || s.status === "INTERNAL_ERROR"
+        ? s.status
+        : "QUEUED";
     return {
       id: s.id,
       examQuestionId: s.examQuestionId,
       sequence: s.sequence,
       language: s.language,
-      status: s.status,
+      status,
+      graded,
+      ...(graded && showVerdicts
+        ? { testsPassed: s.testsPassed ?? 0, testsTotal: s.testsTotal ?? 0 }
+        : {}),
       codeSha256: s.codeSha256,
       createdAt: s.createdAt.toISOString(),
     };
   }
 
-  private detail(s: Submission): SubmissionDetail {
-    return { ...this.summary(s), code: s.code };
+  private detail(s: Submission, showVerdicts: boolean): SubmissionDetail {
+    return { ...this.summary(s, showVerdicts), code: s.code };
   }
 
   private findByClientId(registrationId: string, clientSubmissionId: string) {
@@ -209,7 +226,7 @@ export class StudentWorkService {
       if (existing.examQuestionId !== examQuestionId) {
         throw studentError(HttpStatus.CONFLICT, "NOT_IN_EXAM", "Submission ID already used.");
       }
-      return this.detail(existing);
+      return this.detail(existing, seat.exam.showSubmissionVerdicts);
     }
 
     this.seats.requireWorking(seat);
@@ -232,7 +249,7 @@ export class StudentWorkService {
       },
       correlationId: cid,
     });
-    return this.detail(created);
+    return this.detail(created, seat.exam.showSubmissionVerdicts);
   }
 
   private async createSubmission(
@@ -241,55 +258,67 @@ export class StudentWorkService {
     body: { language: Language; code: string; clientSubmissionId: string },
   ): Promise<Submission> {
     const max = seat.exam.maxSubmissionsPerQuestion;
-    const used = await this.prisma.submission.count({
-      where: { registrationId: seat.reg.id, examQuestionId },
-    });
-    if (used >= max) {
-      throw studentError(
-        HttpStatus.CONFLICT,
-        "SUBMISSION_LIMIT",
-        `You've used all ${max} submissions for this question.`,
-      );
-    }
     try {
-      return await this.prisma.submission.create({
-        data: {
-          registrationId: seat.reg.id,
-          examQuestionId,
-          sequence: used + 1,
-          clientSubmissionId: body.clientSubmissionId,
-          language: body.language,
-          code: body.code,
-          codeSha256: sha256(body.code),
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        // Submissions for one seat and question go one at a time (a transaction-scoped lock),
+        // so the count and the next sequence number can't race. The unique index on the
+        // sequence stays as a backstop.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${seat.reg.id}:${examQuestionId}`}))`;
+        const same = await tx.submission.findUnique({
+          where: {
+            registrationId_clientSubmissionId: {
+              registrationId: seat.reg.id,
+              clientSubmissionId: body.clientSubmissionId,
+            },
+          },
+        });
+        if (same) return same;
+        const used = await tx.submission.count({
+          where: { registrationId: seat.reg.id, examQuestionId },
+        });
+        if (used >= max) {
+          throw studentError(
+            HttpStatus.CONFLICT,
+            "SUBMISSION_LIMIT",
+            `You've used all ${max} submissions for this question.`,
+          );
+        }
+        // The snapshot and its grading job are written together, before anything runs.
+        return tx.submission.create({
+          data: {
+            registrationId: seat.reg.id,
+            examQuestionId,
+            sequence: used + 1,
+            clientSubmissionId: body.clientSubmissionId,
+            language: body.language,
+            code: body.code,
+            codeSha256: sha256(body.code),
+            job: { create: {} },
+          },
+        });
       });
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
-      // Two requests raced. If it was this same submission, return it; otherwise the other
-      // one took this slot, and the student should try again (and see the new count).
+      // The same client ID used for a different question at the same moment.
       const same = await this.findByClientId(seat.reg.id, body.clientSubmissionId);
       if (same) return same;
-      throw studentError(
-        HttpStatus.CONFLICT,
-        "SUBMISSION_LIMIT",
-        "Another submission for this question was just saved. Check your submissions and try again.",
-      );
+      throw studentError(HttpStatus.CONFLICT, "SUBMISSION_LIMIT", "Submission ID already used.");
     }
   }
 
   async listSubmissions(p: StudentPrincipal, examQuestionId?: string) {
-    const { reg } = await this.seats.load(p);
+    const { exam, reg } = await this.seats.load(p);
     const rows = await this.prisma.submission.findMany({
       where: { registrationId: reg.id, ...(examQuestionId ? { examQuestionId } : {}) },
       orderBy: [{ examQuestionId: "asc" }, { sequence: "desc" }],
     });
-    return rows.map((s) => this.summary(s));
+    return rows.map((s) => this.summary(s, exam.showSubmissionVerdicts));
   }
 
   async getSubmission(p: StudentPrincipal, id: string): Promise<SubmissionDetail> {
-    const { reg } = await this.seats.load(p);
+    const { exam, reg } = await this.seats.load(p);
     const s = await this.prisma.submission.findFirst({ where: { id, registrationId: reg.id } });
     if (!s) throw new NotFoundException("Submission not found.");
-    return this.detail(s);
+    return this.detail(s, exam.showSubmissionVerdicts);
   }
 }

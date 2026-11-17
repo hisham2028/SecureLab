@@ -107,6 +107,7 @@ export interface ExamSettings {
   allowedLanguages: Language[];
   navigationPolicy: "FREE" | "SEQUENTIAL";
   maxSubmissionsPerQuestion: number;
+  showSubmissionVerdicts: boolean;
   aiMode: AiMode;
 }
 
@@ -156,6 +157,8 @@ export interface QuestionContent {
   difficulty: Difficulty;
   tags: string[];
   aiMode: AiMode;
+  comparisonMode: "EXACT" | "WHITESPACE";
+  scoringMode: "WEIGHTED" | "ALL_OR_NOTHING";
   testCases: TestCase[];
 }
 

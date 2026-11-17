@@ -1,17 +1,17 @@
 # SecureLab
 
-Programming examination platform for university computer labs. This repository is the Phase 1
-foundation from the development roadmap: a monorepo with the backend API, host dashboard,
-student desktop client and the execution (judge) integration.
+Programming examination platform for university computer labs: a monorepo with the backend API
+and grading worker, the host dashboard, the student desktop client and the execution (judge)
+integration, built phase by phase from the development roadmap.
 
-| Path              | What it is                                                                                                |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `apps/api`        | NestJS API: staff auth, roles, append-only audit log, health checks, Judge0 adapter. Postgres via Prisma. |
-| `apps/host`       | React + Vite host dashboard (sign-in only for now).                                                       |
-| `apps/student`    | Electron student client (Windows first): sandboxed renderer, Monaco, encrypted local autosave.            |
-| `packages/shared` | Types and rules shared by all apps: exam lifecycle, custom student ID validation, verdicts.               |
-| `infra`           | Local docker-compose (Postgres, Redis, Judge0) and the Judge0 isolation spike.                            |
-| `docs/adr`        | Architecture decision records.                                                                            |
+| Path              | What it is                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| `apps/api`        | NestJS API and grading worker: staff auth, roles, audit log, exams, Judge0 grading queue. Postgres via Prisma. |
+| `apps/host`       | React + Vite host dashboard: exams, question bank, students and PIN slips.                                     |
+| `apps/student`    | Electron student client (Windows first): sandboxed renderer, Monaco, encrypted local autosave.                 |
+| `packages/shared` | Types and rules shared by all apps: exam lifecycle, custom student ID validation, verdicts.                    |
+| `infra`           | Local docker-compose (Postgres, Redis, Judge0) the Judge0 isolation spike, and the grading benchmarks.         |
+| `docs/adr`        | Architecture decision records.                                                                                 |
 
 ## Getting started
 
@@ -28,6 +28,7 @@ pnpm --filter @securelab/api build
 pnpm --filter @securelab/api db:migrate
 SEED_ADMIN_PASSWORD='choose-a-long-password' pnpm --filter @securelab/api db:seed
 pnpm --filter @securelab/api start    # http://localhost:3000/health/ready
+pnpm --filter @securelab/api worker   # grades submissions (or JUDGE_WORKER_IN_API=true in .env)
 pnpm --filter @securelab/host dev     # http://localhost:5173
 pnpm --filter @securelab/student dev  # opens the Electron client
 ```
@@ -68,6 +69,16 @@ scoped to the caller's own seat; hidden test cases never reach them.
 
 See [ADR 0005](docs/adr/0005-student-drafts-and-submissions.md) for how drafts, sync and
 submissions fit together.
+
+### Grading
+
+Submissions are graded by a separate worker process (`pnpm --filter @securelab/api worker`) that
+takes jobs from a queue in Postgres, runs the hidden tests in Judge0 and stores an append-only
+evaluation. Run as many workers as you like; `JUDGE_WORKER_CONCURRENCY` sets how many submissions
+each grades at once. Judge outages are retried and never become wrong answers. See
+[ADR 0006](docs/adr/0006-judge-queue-and-scoring.md) and the
+[execution boundary report](docs/security/execution-boundary.md), which also explains how to run
+the adversarial checks and the load benchmark in `infra/judge-bench`.
 
 ### Pointing the student app at a server
 
