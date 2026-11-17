@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "preinstall": "node scripts/only-pnpm.cjs",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",

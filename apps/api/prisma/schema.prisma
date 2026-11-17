@@ -1,5 +1,6 @@
-// SecureLab Phase 1 schema: institutions, staff identities and audit trail.
-// Exams, questions, registrations and submissions arrive in Phase 2+.
+// SecureLab schema.
+// Phase 1: institutions, staff identities, audit trail.
+// Phase 2: exams, versioned question bank, exam question snapshots, students, registrations.
 
 generator client {
   provider = "prisma-client-js"
@@ -24,6 +25,9 @@ model Institution {
   updatedAt DateTime    @updatedAt @map("updated_at")
   staff     StaffUser[]
   auditLogs AuditLog[]
+  exams     Exam[]
+  questions Question[]
+  students  Student[]
 
   @@map("institutions")
 }
@@ -62,4 +66,186 @@ model AuditLog {
   @@index([institutionId, createdAt])
   @@index([targetType, targetId])
   @@map("audit_logs")
+}
+
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  RUNNING
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum Language {
+  c
+  cpp
+  python
+}
+
+enum AiMode {
+  DISABLED
+  HINTS_ONLY
+  FULL
+}
+
+enum NavigationPolicy {
+  FREE
+  SEQUENTIAL
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Exam {
+  id                        String             @id @default(uuid()) @db.Uuid
+  institutionId             String             @map("institution_id") @db.Uuid
+  institution               Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  createdById               String             @map("created_by_id") @db.Uuid
+  title                     String
+  instructions              String             @default("")
+  status                    ExamStatus         @default(DRAFT)
+  /// Short code students type to find the exam. Unique while the exam exists.
+  accessCode                String             @unique @map("access_code")
+  durationMinutes           Int                @map("duration_minutes")
+  scheduledStartAt          DateTime?          @map("scheduled_start_at")
+  /// Minutes after the actual start during which students may still sign in.
+  lateEntryMinutes          Int                @default(15) @map("late_entry_minutes")
+  allowEarlySubmit          Boolean            @default(true) @map("allow_early_submit")
+  /// Host-defined custom student ID rule (validated by @securelab/shared StudentIdRuleSchema).
+  studentIdRule             Json               @map("student_id_rule")
+  allowedLanguages          Language[]         @map("allowed_languages")
+  navigationPolicy          NavigationPolicy   @default(FREE) @map("navigation_policy")
+  maxSubmissionsPerQuestion Int                @default(10) @map("max_submissions_per_question")
+  /// Upper bound for AI help in this exam; a question can only be stricter.
+  aiMode                    AiMode             @default(DISABLED) @map("ai_mode")
+  /// Server-authoritative timing. All times are server clock.
+  startedAt                 DateTime?          @map("started_at")
+  pausedAt                  DateTime?          @map("paused_at")
+  pausedSeconds             Int                @default(0) @map("paused_seconds")
+  completedAt               DateTime?          @map("completed_at")
+  /// Optimistic concurrency token; bumped on every update.
+  revision                  Int                @default(1)
+  createdAt                 DateTime           @default(now()) @map("created_at")
+  updatedAt                 DateTime           @updatedAt @map("updated_at")
+  questions                 ExamQuestion[]
+  registrations             ExamRegistration[]
+
+  @@index([institutionId, status])
+  @@map("exams")
+}
+
+/// Bank entry. Content lives in immutable QuestionVersion rows; editing creates a new version.
+model Question {
+  id            String            @id @default(uuid()) @db.Uuid
+  institutionId String            @map("institution_id") @db.Uuid
+  institution   Institution       @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  createdById   String            @map("created_by_id") @db.Uuid
+  latestVersion Int               @default(1) @map("latest_version")
+  archived      Boolean           @default(false)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  versions      QuestionVersion[]
+
+  @@index([institutionId, archived])
+  @@map("questions")
+}
+
+/// Immutable. Never updated or deleted once created (enforced by a DB trigger).
+model QuestionVersion {
+  id               String         @id @default(uuid()) @db.Uuid
+  questionId       String         @map("question_id") @db.Uuid
+  question         Question       @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  version          Int
+  title            String
+  statement        String
+  inputFormat      String         @default("") @map("input_format")
+  outputFormat     String         @default("") @map("output_format")
+  constraints      String         @default("")
+  allowedLanguages Language[]     @map("allowed_languages")
+  timeLimitMs      Int            @map("time_limit_ms")
+  memoryLimitKb    Int            @map("memory_limit_kb")
+  topic            String         @default("")
+  difficulty       Difficulty     @default(MEDIUM)
+  tags             String[]
+  aiMode           AiMode         @default(DISABLED) @map("ai_mode")
+  createdById      String         @map("created_by_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at")
+  testCases        TestCase[]
+  examQuestions    ExamQuestion[]
+
+  @@unique([questionId, version])
+  @@map("question_versions")
+}
+
+/// Immutable with its version. Public cases are samples shown to students; hidden cases never leave the server.
+model TestCase {
+  id                String          @id @default(uuid()) @db.Uuid
+  questionVersionId String          @map("question_version_id") @db.Uuid
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  ordinal           Int
+  isHidden          Boolean         @map("is_hidden")
+  input             String
+  expectedOutput    String          @map("expected_output")
+  weight            Int             @default(1)
+
+  @@unique([questionVersionId, ordinal])
+  @@map("test_cases")
+}
+
+/// Pins an exam to an exact immutable question version, so later bank edits never change the exam.
+model ExamQuestion {
+  id                String          @id @default(uuid()) @db.Uuid
+  examId            String          @map("exam_id") @db.Uuid
+  exam              Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionVersionId String          @map("question_version_id") @db.Uuid
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  ordinal           Int
+  points            Int
+
+  @@unique([examId, ordinal])
+  @@unique([examId, questionVersionId])
+  @@index([questionVersionId])
+  @@map("exam_questions")
+}
+
+/// University identity: one row per real student per institution.
+model Student {
+  id            String             @id @default(uuid()) @db.Uuid
+  institutionId String             @map("institution_id") @db.Uuid
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  /// Normalized custom ID, kept as text so leading zeros survive.
+  studentNumber String             @map("student_number")
+  fullName      String             @map("full_name")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  registrations ExamRegistration[]
+
+  @@unique([institutionId, studentNumber])
+  @@map("students")
+}
+
+/// Exam-attempt identity: a student's seat in one exam, with its own credential.
+model ExamRegistration {
+  id               String    @id @default(uuid()) @db.Uuid
+  examId           String    @map("exam_id") @db.Uuid
+  exam             Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId        String    @map("student_id") @db.Uuid
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  /// Copy of the normalized ID used for the per-exam uniqueness rule.
+  examStudentId    String    @map("exam_student_id")
+  pinHash          String    @map("pin_hash")
+  failedPinCount   Int       @default(0) @map("failed_pin_count")
+  lockedAt         DateTime? @map("locked_at")
+  extensionMinutes Int       @default(0) @map("extension_minutes")
+  firstEnteredAt   DateTime? @map("first_entered_at")
+  finishedAt       DateTime? @map("finished_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@unique([examId, examStudentId])
+  @@index([studentId])
+  @@map("exam_registrations")
 }
