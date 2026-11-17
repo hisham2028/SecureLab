@@ -1,0 +1,65 @@
+// SecureLab Phase 1 schema: institutions, staff identities and audit trail.
+// Exams, questions, registrations and submissions arrive in Phase 2+.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  ADMIN
+  HOST
+  INVIGILATOR
+}
+
+model Institution {
+  id        String      @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String      @unique
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  staff     StaffUser[]
+  auditLogs AuditLog[]
+
+  @@map("institutions")
+}
+
+model StaffUser {
+  id            String      @id @default(uuid()) @db.Uuid
+  institutionId String      @map("institution_id") @db.Uuid
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  email         String      @unique
+  displayName   String      @map("display_name")
+  passwordHash  String      @map("password_hash")
+  role          StaffRole
+  isActive      Boolean     @default(true) @map("is_active")
+  lastLoginAt   DateTime?   @map("last_login_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@index([institutionId])
+  @@map("staff_users")
+}
+
+// Append-only. The application never updates or deletes rows here.
+model AuditLog {
+  id            BigInt       @id @default(autoincrement())
+  institutionId String?      @map("institution_id") @db.Uuid
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  actorType     String       @map("actor_type") // "staff" | "student" | "system"
+  actorId       String?      @map("actor_id")
+  action        String
+  targetType    String?      @map("target_type")
+  targetId      String?      @map("target_id")
+  metadata      Json?
+  correlationId String?      @map("correlation_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([institutionId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}

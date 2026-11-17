@@ -1,0 +1,56 @@
+{
+  "name": "@securelab/student",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SecureLab student desktop client",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "pnpm build:main && concurrently -k \"vite\" \"wait-on tcp:5174 && cross-env SECURELAB_DEV_URL=http://localhost:5174 electron .\"",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "build": "pnpm build:main && pnpm build:renderer",
+    "start": "electron .",
+    "package:win": "pnpm build && electron-builder --win nsis",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@securelab/shared": "workspace:*",
+    "monaco-editor": "^0.52.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.0.12",
+    "vite": "^7.3.0",
+    "vitest": "^3.2.7",
+    "wait-on": "^9.0.1"
+  },
+  "build": {
+    "appId": "edu.securelab.student",
+    "productName": "SecureLab",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}
