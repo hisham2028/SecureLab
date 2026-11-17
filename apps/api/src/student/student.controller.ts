@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from "@nestjs/common";
 import type { z } from "zod";
 import { Public } from "../auth/public.decorator";
 import { StudentRoute } from "../auth/student-route.decorator";
@@ -6,12 +16,25 @@ import { CorrelationId, CurrentStudent } from "../auth/current-user.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import type { StudentPrincipal } from "../auth/auth.types";
 import { StudentService } from "./student.service";
-import { StudentLoginSchema } from "./student.dto";
+import { StudentWorkService } from "./student-work.service";
+import {
+  DraftSaveSchema,
+  LanguageSchema,
+  NextQuestionSchema,
+  RunSchema,
+  StudentLoginSchema,
+  SubmitSchema,
+} from "./student.dto";
+
+const QuestionId = new ParseUUIDPipe();
 
 /** Endpoints used by the student desktop client. Everything is scoped to the caller's own seat. */
 @Controller("v1/student")
 export class StudentController {
-  constructor(private readonly student: StudentService) {}
+  constructor(
+    private readonly student: StudentService,
+    private readonly work: StudentWorkService,
+  ) {}
 
   @Public()
   @Post("session")
@@ -38,11 +61,74 @@ export class StudentController {
 
   @StudentRoute()
   @Get("exam/questions/:examQuestionId")
-  question(
-    @CurrentStudent() p: StudentPrincipal,
-    @Param("examQuestionId", ParseUUIDPipe) id: string,
-  ) {
+  question(@CurrentStudent() p: StudentPrincipal, @Param("examQuestionId", QuestionId) id: string) {
     return this.student.question(p, id);
+  }
+
+  @StudentRoute()
+  @Post("exam/next")
+  @HttpCode(200)
+  next(
+    @CurrentStudent() p: StudentPrincipal,
+    @Body(new ZodValidationPipe(NextQuestionSchema)) body: z.infer<typeof NextQuestionSchema>,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.student.next(p, body.fromQuestionId, cid);
+  }
+
+  @StudentRoute()
+  @Get("exam/drafts")
+  drafts(@CurrentStudent() p: StudentPrincipal) {
+    return this.work.listDrafts(p);
+  }
+
+  @StudentRoute()
+  @Put("exam/drafts/:examQuestionId/:language")
+  saveDraft(
+    @CurrentStudent() p: StudentPrincipal,
+    @Param("examQuestionId", QuestionId) id: string,
+    @Param("language", new ZodValidationPipe(LanguageSchema))
+    language: z.infer<typeof LanguageSchema>,
+    @Body(new ZodValidationPipe(DraftSaveSchema)) body: z.infer<typeof DraftSaveSchema>,
+  ) {
+    return this.work.saveDraft(p, id, language, body.code, body.revision);
+  }
+
+  @StudentRoute()
+  @Post("exam/questions/:examQuestionId/run")
+  @HttpCode(200)
+  run(
+    @CurrentStudent() p: StudentPrincipal,
+    @Param("examQuestionId", QuestionId) id: string,
+    @Body(new ZodValidationPipe(RunSchema)) body: z.infer<typeof RunSchema>,
+  ) {
+    return this.work.run(p, id, body.language, body.code, body.stdin);
+  }
+
+  @StudentRoute()
+  @Post("exam/questions/:examQuestionId/submissions")
+  submit(
+    @CurrentStudent() p: StudentPrincipal,
+    @Param("examQuestionId", QuestionId) id: string,
+    @Body(new ZodValidationPipe(SubmitSchema)) body: z.infer<typeof SubmitSchema>,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.work.submit(p, id, body, cid);
+  }
+
+  @StudentRoute()
+  @Get("exam/submissions")
+  submissions(
+    @CurrentStudent() p: StudentPrincipal,
+    @Query("questionId", new ParseUUIDPipe({ optional: true })) questionId?: string,
+  ) {
+    return this.work.listSubmissions(p, questionId);
+  }
+
+  @StudentRoute()
+  @Get("exam/submissions/:id")
+  submission(@CurrentStudent() p: StudentPrincipal, @Param("id", new ParseUUIDPipe()) id: string) {
+    return this.work.getSubmission(p, id);
   }
 
   @StudentRoute()

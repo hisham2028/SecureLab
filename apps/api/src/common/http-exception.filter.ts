@@ -18,12 +18,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const body = exception.getResponse();
-      const message =
-        typeof body === "string"
-          ? body
-          : ((body as { message?: unknown }).message ?? exception.message);
+      const obj = typeof body === "string" ? {} : (body as AppErrorBody);
+      const message = typeof body === "string" ? body : (obj.message ?? exception.message);
+      // A thrown body may carry its own machine-readable code and safe details for the client.
+      const code = typeof obj.code === "string" ? obj.code : httpCode(status);
       res.status(status).json({
-        error: { code: httpCode(status), message, correlationId },
+        error: {
+          code,
+          message,
+          correlationId,
+          ...(obj.details !== undefined ? { details: obj.details } : {}),
+        },
       });
       return;
     }
@@ -36,6 +41,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: { code: "INTERNAL", message: "Something went wrong on our side.", correlationId },
     });
   }
+}
+
+interface AppErrorBody {
+  message?: unknown;
+  code?: unknown;
+  details?: unknown;
 }
 
 function httpCode(status: number): string {
