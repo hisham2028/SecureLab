@@ -50,6 +50,9 @@ importers:
       argon2:
         specifier: ^0.45.2
         version: 0.45.2
+      csv-parse:
+        specifier: ^5.6.0
+        version: 5.6.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1964,6 +1967,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  csv-parse@5.6.0:
+    resolution: {integrity: sha512-l3nz3euub2QMg5ouu5U09Ew9Wf6/wQ8I++ch1loQ0ljmzhmfZYrH9fflS22i/PQEvsPvxCwxgz5q7UB8K1JO4Q==}
 
   data-urls@6.0.1:
     resolution: {integrity: sha512-euIQENZg6x8mj3fO6o9+fOW8MimUI4PpD/fZBhJfeioZVy9TUpM4UY7KjQNVZFlqwJ0UdzRDzkycB997HEq1BQ==}
@@ -6035,6 +6041,8 @@ snapshots:
       lru-cache: 11.5.3
 
   csstype@3.2.3: {}
+
+  csv-parse@5.6.0: {}
 
   data-urls@6.0.1:
     dependencies:

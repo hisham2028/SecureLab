@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AuthService } from "./auth.service";
 import { Public } from "./public.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
-import type { AuthedRequest } from "./auth.types";
+import type { AuthedRequest, StaffPrincipal } from "./auth.types";
 
 const LoginSchema = z.object({
   email: z.string().email().max(254),
@@ -24,6 +24,6 @@ export class AuthController {
 
   @Get("me")
   me(@Req() req: AuthedRequest) {
-    return this.auth.me(req.user!);
+    return this.auth.me(req.user as StaffPrincipal);
   }
 }

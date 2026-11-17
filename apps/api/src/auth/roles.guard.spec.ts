@@ -6,7 +6,9 @@ function ctxWith(role?: string): ExecutionContext {
   return {
     getHandler: () => () => undefined,
     getClass: () => class {},
-    switchToHttp: () => ({ getRequest: () => ({ user: role ? { role } : undefined }) }),
+    switchToHttp: () => ({
+      getRequest: () => ({ user: role ? { role, kind: "staff" } : undefined }),
+    }),
   } as unknown as ExecutionContext;
 }
 
