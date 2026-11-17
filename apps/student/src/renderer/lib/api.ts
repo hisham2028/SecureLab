@@ -1,5 +1,8 @@
 import type {
   DraftSaveResult,
+  HeartbeatRequest,
+  HeartbeatResponse,
+  StudentResult,
   Language,
   RunResult,
   ServerDraft,
@@ -29,6 +32,8 @@ export const serverClock = new ServerClock();
 export const connection = createStore<Connection>({ state: "online", since: Date.now() });
 /** Set when the server ends the session (PIN reset, seat removed); the app returns to sign-in. */
 export const sessionEnded = createStore<string | null>(null);
+/** Set while an invigilator has blocked this seat; the app shows a waiting screen. */
+export const seatBlocked = createStore<string | null>(null);
 
 function setConnection(state: Connection["state"]) {
   if (connection.get().state !== state) connection.set({ state, since: Date.now() });
@@ -43,6 +48,8 @@ async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unkn
   setConnection(res.status === 0 ? "offline" : "online");
   if (!res.ok) {
     if (res.status === 401 && path !== "/v1/student/session") sessionEnded.set(res.error.message);
+    if (res.error.code === "SEAT_BLOCKED" && path !== "/v1/student/session")
+      seatBlocked.set(res.error.message);
     throw new ApiError(res.status, res.error.code, res.error.message, res.error.details);
   }
   const clock = (res.data as { clock?: { serverTime?: string } } | null)?.clock;
@@ -78,5 +85,10 @@ export const api = {
     ),
   submission: (id: string) =>
     call<SubmissionDetail>("GET", `/v1/student/exam/submissions/${encodeURIComponent(id)}`),
+  heartbeat: (body: HeartbeatRequest) =>
+    call<HeartbeatResponse>("POST", "/v1/student/exam/heartbeat", body),
+  /** A published result; checked with the sign-in details, without signing in. */
+  result: (accessCode: string, studentId: string, pin: string) =>
+    call<StudentResult>("POST", "/v1/student/result", { accessCode, studentId, pin }),
   signOut: () => window.securelab?.signOut(),
 };

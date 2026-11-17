@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import type { StudentOverview } from "@securelab/shared";
-import { api, ApiError, sessionEnded } from "./lib/api";
+import type { StudentOverview, StudentResult } from "@securelab/shared";
+import { api, ApiError, seatBlocked, sessionEnded } from "./lib/api";
 import { useStore } from "./lib/store";
 import { SignIn } from "./screens/SignIn";
 import { PreExam } from "./screens/PreExam";
 import { ExamScreen, type FinishReason } from "./screens/ExamScreen";
 import { Done } from "./screens/Done";
+import { Result } from "./screens/Result";
+import { Blocked } from "./screens/Blocked";
 import { Banner } from "./ui/Banner";
 
 type Stage =
@@ -13,7 +15,8 @@ type Stage =
   | { kind: "loading" }
   | { kind: "pre" }
   | { kind: "exam" }
-  | { kind: "done"; reason: FinishReason };
+  | { kind: "done"; reason: FinishReason }
+  | { kind: "result"; result: StudentResult };
 
 /** Where a freshly loaded overview should take the student. */
 function stageFor(o: StudentOverview): Stage {
@@ -35,6 +38,7 @@ export function App() {
   const [serverUrl, setServerUrl] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const ended = useStore(sessionEnded);
+  const blocked = useStore(seatBlocked);
 
   useEffect(() => {
     void window.securelab?.environmentInfo().then((i) => setServerUrl(i.apiUrl));
@@ -81,9 +85,24 @@ export function App() {
     );
   }
 
+  if (blocked && stage.kind !== "signin" && stage.kind !== "result") {
+    return <Blocked message={blocked} onUnblocked={() => void load()} />;
+  }
+
   switch (stage.kind) {
     case "signin":
-      return <SignIn onSignedIn={() => void load()} notice={stage.notice} serverUrl={serverUrl} />;
+      return (
+        <SignIn
+          onSignedIn={() => void load()}
+          onResult={(result) => setStage({ kind: "result", result })}
+          notice={stage.notice}
+          serverUrl={serverUrl}
+        />
+      );
+    case "result":
+      return (
+        <Result result={stage.result} onBack={() => setStage({ kind: "signin", notice: null })} />
+      );
     case "loading":
       return (
         <div className="center-page">

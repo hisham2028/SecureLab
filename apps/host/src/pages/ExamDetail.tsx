@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../api";
 import type { Exam, ExamStatus, Me } from "../api";
-import { navigate } from "../router";
+import { navigate, type ExamTab } from "../router";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Drawer } from "../ui/Drawer";
 import { ErrorBanner, formatDateTime, LANGUAGE_LABEL, StatusBadge } from "../ui/bits";
 import { ExamSettingsForm } from "./ExamSettingsForm";
 import { QuestionsTab } from "./QuestionsTab";
 import { StudentsTab } from "./StudentsTab";
+import { LiveTab } from "./LiveTab";
+import { ResultsTab } from "./ResultsTab";
 
-type Tab = "questions" | "students" | "details";
+type Tab = ExamTab;
 const EDITABLE: ExamStatus[] = ["DRAFT", "SCHEDULED"];
 
 interface PendingAction {
@@ -85,6 +87,9 @@ export function ExamDetail({ id, tab, me }: { id: string; tab: Tab; me: Me }) {
   }
 
   const actions = actionsFor(exam, me.role);
+  const started = !["DRAFT", "SCHEDULED"].includes(exam.status);
+  const hasResults =
+    canManage && ["RUNNING", "PAUSED", "COMPLETED", "ARCHIVED"].includes(exam.status);
   const editable = EDITABLE.includes(exam.status) && canManage;
 
   return (
@@ -152,8 +157,10 @@ export function ExamDetail({ id, tab, me }: { id: string; tab: Tab; me: Me }) {
           [
             ["questions", `Questions (${exam.questions.length})`],
             ["students", `Students (${exam.registrationCount})`],
+            ...(started ? [["live", "Live"]] : []),
+            ...(hasResults ? [["results", "Results"]] : []),
             ["details", "Details"],
-          ] as const
+          ] as [Tab, string][]
         ).map(([key, label]) => (
           <a
             key={key}
@@ -174,6 +181,8 @@ export function ExamDetail({ id, tab, me }: { id: string; tab: Tab; me: Me }) {
         {tab === "students" && (
           <StudentsTab exam={exam} role={me.role} onCountChange={() => void reload()} />
         )}
+        {tab === "live" && started && <LiveTab exam={exam} role={me.role} />}
+        {tab === "results" && hasResults && <ResultsTab exam={exam} role={me.role} />}
         {tab === "details" && <DetailsTab exam={exam} />}
       </section>
 

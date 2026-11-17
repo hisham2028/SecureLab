@@ -3,6 +3,8 @@ import type { StudentOverview } from "@securelab/shared";
 import { api, ApiError } from "../lib/api";
 import { LANGUAGE_LABEL } from "../lib/labels";
 import { Banner } from "../ui/Banner";
+import { Announcements } from "../ui/Announcements";
+import { useHeartbeat, useUnseen } from "../lib/heartbeat";
 
 type Check = NonNullable<Awaited<ReturnType<NonNullable<Window["securelab"]>["systemCheck"]>>>;
 type Level = "ok" | "warn" | "fail";
@@ -80,6 +82,8 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const { exam, clock, seat } = overview;
+  const announcements = useHeartbeat({ enabled: true });
+  const { unseen, dismiss } = useUnseen(seat.registrationId, announcements);
 
   useEffect(() => {
     document.title = `${exam.title} · SecureLab`;
@@ -133,6 +137,7 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
         </button>
       </header>
       <main className="pre-exam">
+        <Announcements items={unseen} onDismiss={dismiss} />
         <section className="card" aria-labelledby="rules-h">
           <h2 id="rules-h">Before you start</h2>
           <dl className="facts">

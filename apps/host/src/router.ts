@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 
+export type ExamTab = "questions" | "students" | "live" | "results" | "details";
+const EXAM_TABS: ExamTab[] = ["questions", "students", "live", "results", "details"];
+
 /** Minimal hash router: #/exams, #/exams/:id/students, #/questions/new, ... */
 export type Route =
   | { page: "exams" }
-  | { page: "exam"; id: string; tab: "questions" | "students" | "details" }
+  | { page: "exam"; id: string; tab: ExamTab }
   | { page: "pins"; id: string }
   | { page: "questions" }
   | { page: "question-new" }
@@ -16,7 +19,7 @@ export function parseRoute(hash: string): Route {
   if (!a || (a === "exams" && !b)) return { page: "exams" };
   if (a === "exams" && b && c === "pins") return { page: "pins", id: b };
   if (a === "exams" && b) {
-    const tab = c === "students" || c === "details" ? c : "questions";
+    const tab = EXAM_TABS.includes(c as ExamTab) ? (c as ExamTab) : "questions";
     return { page: "exam", id: b, tab };
   }
   if (a === "questions" && !b) return { page: "questions" };

@@ -840,3 +840,58 @@ th {
     padding: var(--s4);
   }
 }
+
+/* Announcements, results (Phase 5) */
+.announcements {
+  display: grid;
+}
+.announcement {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  border-left: 4px solid var(--accent);
+}
+.announcement p {
+  margin: var(--s1) 0 0;
+  white-space: pre-wrap;
+}
+.pre-exam .announcements {
+  gap: var(--s2);
+}
+.pre-exam .announcement {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+}
+button.link.block-link {
+  display: block;
+  margin: var(--s4) auto 0;
+}
+.result {
+  width: 100%;
+  max-width: 520px;
+}
+.result-total {
+  margin: var(--s4) 0;
+}
+.result-score {
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--s4);
+}
+.result-table th,
+.result-table td {
+  text-align: left;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.result-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

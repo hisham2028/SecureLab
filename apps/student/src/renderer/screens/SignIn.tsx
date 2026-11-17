@@ -1,14 +1,16 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api, ApiError } from "../lib/api";
 import { Banner } from "../ui/Banner";
+import type { StudentResult } from "@securelab/shared";
 
 interface Props {
   onSignedIn: () => void;
+  onResult: (result: StudentResult) => void;
   notice: string | null;
   serverUrl: string;
 }
 
-export function SignIn({ onSignedIn, notice, serverUrl }: Props) {
+export function SignIn({ onSignedIn, onResult, notice, serverUrl }: Props) {
   const ids = { code: useId(), student: useId(), pin: useId(), pinHint: useId() };
   const [accessCode, setAccessCode] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -40,6 +42,29 @@ export function SignIn({ onSignedIn, notice, serverUrl }: Props) {
             ? err.message
             : "Sign-in didn't work. Try again.",
       );
+      setBusy(false);
+    }
+  }
+
+  async function checkResult() {
+    setPinTouched(true);
+    if (!/^\d{6}$/.test(pin) || !accessCode.trim() || !studentId.trim()) {
+      setError("Enter your exam code, student ID and PIN to check your result.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      onResult(await api.result(accessCode.trim(), studentId.trim(), pin));
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 0
+          ? "Can't reach the exam server. Check the network cable or Wi-Fi, then try again."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't check your result. Try again.",
+      );
+    } finally {
       setBusy(false);
     }
   }
@@ -105,6 +130,14 @@ export function SignIn({ onSignedIn, notice, serverUrl }: Props) {
           </div>
           <button type="submit" className="primary block" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            className="link block-link"
+            disabled={busy}
+            onClick={() => void checkResult()}
+          >
+            Check my result
           </button>
         </form>
       </main>

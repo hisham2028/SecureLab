@@ -64,7 +64,7 @@ describeDb("Phase 5: live monitoring, host actions, marks and results (e2e)", ()
         where: { status: { in: ["QUEUED", "RUNNING"] }, submission: { examQuestion: { examId } } },
       });
       if (open === 0) return;
-      await worker.runOnce();
+      await worker.runOnce(examId);
     }
     throw new Error("queue didn't drain");
   }
@@ -614,7 +614,10 @@ describeDb("Phase 5: live monitoring, host actions, marks and results (e2e)", ()
       .set(host())
       .expect(200)
       .expect("content-type", /text\/csv/);
-    const lines = csv.text.replace(/^\uFEFF/, "").trim().split("\r\n");
+    const lines = csv.text
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
     expect(lines[0]).toBe(
       "student_id,full_name,Q1 Add two numbers (/10),Q2 Add again (/20),total,max_total",
     );

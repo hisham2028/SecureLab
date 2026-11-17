@@ -41,7 +41,9 @@ export function seatStatus(s: SeatStatusInput, now: Date): SeatStatus {
 }
 
 export function isOnline(lastSeenAt: Date | null, now: Date): boolean {
-  return lastSeenAt !== null && now.getTime() - lastSeenAt.getTime() <= ONLINE_WINDOW_SECONDS * 1000;
+  return (
+    lastSeenAt !== null && now.getTime() - lastSeenAt.getTime() <= ONLINE_WINDOW_SECONDS * 1000
+  );
 }
 
 /**
