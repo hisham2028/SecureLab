@@ -31,3 +31,17 @@ export const SubmitSchema = z.object({
 });
 
 export const NextQuestionSchema = z.object({ fromQuestionId: z.string().uuid() });
+
+export const HeartbeatSchema = z.object({
+  currentQuestionId: z.string().uuid().nullable().optional(),
+  language: LanguageSchema.nullable().optional(),
+  events: z
+    .array(
+      z.object({
+        type: z.enum(["FOCUS_LOST", "FOCUS_RETURNED"]),
+        at: z.string().datetime({ offset: true }),
+      }),
+    )
+    .max(50)
+    .optional(),
+});

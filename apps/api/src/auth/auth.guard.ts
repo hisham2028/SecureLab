@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
@@ -10,6 +11,8 @@ import { JwtService } from "@nestjs/jwt";
 import { IS_PUBLIC } from "./public.decorator";
 import { IS_STUDENT_ROUTE } from "./student-route.decorator";
 import type { AuthedRequest, Principal } from "./auth.types";
+import { AuditService } from "../audit/audit.service";
+import { recordDenied } from "./denied";
 
 /**
  * Global guard. Every route requires a valid bearer token unless marked @Public().
@@ -20,6 +23,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -41,6 +45,7 @@ export class AuthGuard implements CanActivate {
       this.reflector.getAllAndOverride<boolean>(IS_STUDENT_ROUTE, targets) ?? false;
     const expected = studentRoute ? "student" : "staff";
     if (payload.kind !== expected) {
+      await recordDenied(this.audit, req, payload, `${payload.kind}_on_${expected}_route`);
       throw new ForbiddenException("You don't have permission to do this.");
     }
     req.user = payload;

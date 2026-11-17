@@ -20,6 +20,13 @@ export interface OrderedQuestion {
   allowedLanguages: Language[];
 }
 
+export const seatBlocked = () =>
+  studentError(
+    HttpStatus.FORBIDDEN,
+    "SEAT_BLOCKED",
+    "An invigilator has paused your access to this exam. Your work is kept. Raise your hand.",
+  );
+
 /** Loads the caller's seat and answers "may this student do X right now?" questions. */
 @Injectable()
 export class SeatService {
@@ -36,6 +43,7 @@ export class SeatService {
     if (!reg || reg.lockedAt || credentialVersion(reg.pinHash) !== p.cv) {
       throw new UnauthorizedException("Your session has ended. Sign in again.");
     }
+    if (reg.blockedAt) throw seatBlocked();
     const exam = await this.exams.load({ institutionId: p.institutionId }, p.examId);
     return { exam, reg };
   }

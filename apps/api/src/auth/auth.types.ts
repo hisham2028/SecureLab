@@ -14,6 +14,8 @@ export interface StudentPrincipal {
   institutionId: string;
   /** Credential version: changes when the PIN is reset, which invalidates old tokens. */
   cv: string;
+  /** This sign-in's ID; a second PC signing in to the same seat gets a different one. */
+  sid?: string;
   kind: "student";
 }
 

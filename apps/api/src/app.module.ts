@@ -11,6 +11,8 @@ import { ExamsModule } from "./exams/exams.module";
 import { RegistrationsModule } from "./registrations/registrations.module";
 import { StudentModule } from "./student/student.module";
 import { JudgeModule } from "./judge/judge.module";
+import { LiveModule } from "./live/live.module";
+import { ResultsModule } from "./results/results.module";
 import { StaffModule } from "./staff/staff.controller";
 import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
 
@@ -28,6 +30,8 @@ import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
     RegistrationsModule,
     StudentModule,
     JudgeModule,
+    ResultsModule,
+    LiveModule,
   ],
 })
 export class AppModule implements NestModule {

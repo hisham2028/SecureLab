@@ -239,7 +239,9 @@ export class JudgeWorker implements OnApplicationShutdown {
       err instanceof JudgeInfraError
         ? err.message
         : `unexpected: ${(err as Error)?.message ?? err}`;
-    const giveUp = job.attempts >= MAX_JUDGE_ATTEMPTS;
+    const giveUp = job.attempts >= job.attemptLimit;
+    // Attempt number within the current round (a host's "grade again" starts a new round).
+    const roundAttempt = job.attempts - (job.attemptLimit - MAX_JUDGE_ATTEMPTS);
     this.logger.error(
       JSON.stringify({
         msg: "judge_infra_failure",
@@ -260,7 +262,7 @@ export class JudgeWorker implements OnApplicationShutdown {
               lockedAt: null,
               lockedBy: null,
               lastError: message.slice(0, 1000),
-              runAfter: new Date(Date.now() + retryDelayMs(job.attempts)),
+              runAfter: new Date(Date.now() + retryDelayMs(roundAttempt)),
             },
       });
       if (owned.count !== 1) return;

@@ -19,6 +19,7 @@ import { StudentService } from "./student.service";
 import { StudentWorkService } from "./student-work.service";
 import {
   DraftSaveSchema,
+  HeartbeatSchema,
   LanguageSchema,
   NextQuestionSchema,
   RunSchema,
@@ -44,6 +45,27 @@ export class StudentController {
     @CorrelationId() cid?: string,
   ) {
     return this.student.login(body.accessCode, body.studentId, body.pin, cid);
+  }
+
+  /** A student's own published result. Uses the same credentials as sign-in; no session. */
+  @Public()
+  @Post("result")
+  @HttpCode(200)
+  result(
+    @Body(new ZodValidationPipe(StudentLoginSchema)) body: z.infer<typeof StudentLoginSchema>,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.student.result(body.accessCode, body.studentId, body.pin, cid);
+  }
+
+  @StudentRoute()
+  @Post("exam/heartbeat")
+  @HttpCode(200)
+  heartbeat(
+    @CurrentStudent() p: StudentPrincipal,
+    @Body(new ZodValidationPipe(HeartbeatSchema)) body: z.infer<typeof HeartbeatSchema>,
+  ) {
+    return this.student.heartbeat(p, body);
   }
 
   @StudentRoute()
