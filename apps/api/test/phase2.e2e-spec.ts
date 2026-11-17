@@ -352,6 +352,33 @@ describeDb("Phase 2: exams, questions, registration (e2e)", () => {
       expect(await prisma.examRegistration.count({ where: { examId: exam.id } })).toBe(0);
     });
 
+    it("issues new PINs for everyone before the start, invalidating old ones", async () => {
+      const { exam, credentials } = await publishedExam();
+      const old = credentials[0];
+      const res = await http
+        .post(`/v1/exams/${exam.id}/registrations/reset-pins`)
+        .set(bearer(host))
+        .expect(200);
+      expect(res.body).toHaveLength(2);
+      const fresh = res.body.find((c: { studentId: string }) => c.studentId === old.studentId);
+      if (fresh.pin !== old.pin) {
+        await http
+          .post("/v1/student/session")
+          .send({ accessCode: exam.accessCode, studentId: old.studentId, pin: old.pin })
+          .expect(401);
+      }
+      await studentLogin(exam.accessCode, old.studentId, fresh.pin);
+      await http
+        .post(`/v1/exams/${exam.id}/registrations/reset-pins`)
+        .set(bearer(invig))
+        .expect(403);
+      await start(exam.id).expect(200);
+      await http
+        .post(`/v1/exams/${exam.id}/registrations/reset-pins`)
+        .set(bearer(host))
+        .expect(409);
+    });
+
     it("locks registration once the exam starts", async () => {
       const { exam } = await publishedExam();
       await start(exam.id).expect(200);

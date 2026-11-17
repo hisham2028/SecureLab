@@ -2,9 +2,10 @@ import { useState, type FormEvent } from "react";
 
 interface Props {
   onSubmit: (email: string, password: string) => Promise<void>;
+  notice?: string;
 }
 
-export function LoginForm({ onSubmit }: Props) {
+export function LoginForm({ onSubmit, notice }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function LoginForm({ onSubmit }: Props) {
   return (
     <form onSubmit={handle} className="card" aria-labelledby="signin-title">
       <h1 id="signin-title">Sign in to SecureLab</h1>
+      {notice && <p className="muted">{notice}</p>}
       <label>
         Email
         <input
@@ -51,7 +53,7 @@ export function LoginForm({ onSubmit }: Props) {
           {error}
         </p>
       )}
-      <button type="submit" disabled={busy}>
+      <button type="submit" className="btn btn-primary" disabled={busy}>
         {busy ? "Signing in…" : "Sign in"}
       </button>
     </form>

@@ -48,6 +48,17 @@ export class RegistrationsController {
     return this.registrations.importCsv(user, examId, body.csv, body.dryRun, cid);
   }
 
+  /** New PINs for every seat (before the exam starts), for printing PIN slips. */
+  @Post("reset-pins")
+  @HttpCode(200)
+  resetAllPins(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("examId", ParseUUIDPipe) examId: string,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.registrations.resetAllPins(user, examId, cid);
+  }
+
   @Delete(":registrationId")
   @HttpCode(204)
   remove(

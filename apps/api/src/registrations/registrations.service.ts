@@ -255,6 +255,53 @@ export class RegistrationsService {
     });
   }
 
+  /**
+   * Issues fresh PINs for every seat, for printing PIN slips. Only before the exam starts, since
+   * it signs every student out. Old PINs stop working immediately.
+   */
+  async resetAllPins(
+    user: StaffPrincipal,
+    examId: string,
+    cid?: string,
+  ): Promise<IssuedCredential[]> {
+    await this.editableExam(user, examId);
+    const regs = await this.prisma.examRegistration.findMany({
+      where: { examId },
+      orderBy: { examStudentId: "asc" },
+      include: { student: { select: { fullName: true } } },
+    });
+    const issued = await Promise.all(
+      regs.map(async (r) => {
+        const pin = generatePin();
+        return { reg: r, pin, pinHash: await hashPin(pin) };
+      }),
+    );
+    await this.prisma.$transaction(
+      issued.map((i) =>
+        this.prisma.examRegistration.update({
+          where: { id: i.reg.id },
+          data: { pinHash: i.pinHash, failedPinCount: 0, lockedAt: null },
+        }),
+      ),
+    );
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "registration.pins_reset_all",
+      targetType: "exam",
+      targetId: examId,
+      metadata: { count: issued.length },
+      correlationId: cid,
+    });
+    return issued.map((i) => ({
+      registrationId: i.reg.id,
+      studentId: i.reg.examStudentId,
+      fullName: i.reg.student.fullName,
+      pin: i.pin,
+    }));
+  }
+
   /** Issues a new PIN and unlocks the seat. Old student sessions stop working immediately. */
   async resetPin(
     user: StaffPrincipal,
