@@ -207,6 +207,9 @@ model ExamQuestion {
   ordinal           Int
   points            Int
 
+  drafts      StudentDraft[]
+  submissions Submission[]
+
   @@unique([examId, ordinal])
   @@unique([examId, questionVersionId])
   @@index([questionVersionId])
@@ -230,22 +233,80 @@ model Student {
 
 /// Exam-attempt identity: a student's seat in one exam, with its own credential.
 model ExamRegistration {
-  id               String    @id @default(uuid()) @db.Uuid
-  examId           String    @map("exam_id") @db.Uuid
-  exam             Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
-  studentId        String    @map("student_id") @db.Uuid
-  student          Student   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  id               String         @id @default(uuid()) @db.Uuid
+  examId           String         @map("exam_id") @db.Uuid
+  exam             Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId        String         @map("student_id") @db.Uuid
+  student          Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
   /// Copy of the normalized ID used for the per-exam uniqueness rule.
-  examStudentId    String    @map("exam_student_id")
-  pinHash          String    @map("pin_hash")
-  failedPinCount   Int       @default(0) @map("failed_pin_count")
-  lockedAt         DateTime? @map("locked_at")
-  extensionMinutes Int       @default(0) @map("extension_minutes")
-  firstEnteredAt   DateTime? @map("first_entered_at")
-  finishedAt       DateTime? @map("finished_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  examStudentId    String         @map("exam_student_id")
+  pinHash          String         @map("pin_hash")
+  failedPinCount   Int            @default(0) @map("failed_pin_count")
+  lockedAt         DateTime?      @map("locked_at")
+  extensionMinutes Int            @default(0) @map("extension_minutes")
+  firstEnteredAt   DateTime?      @map("first_entered_at")
+  finishedAt       DateTime?      @map("finished_at")
+  /// SEQUENTIAL exams: index of the question the student is on (0-based, in ordinal order).
+  navigationIndex  Int            @default(0) @map("navigation_index")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  drafts           StudentDraft[]
+  submissions      Submission[]
 
   @@unique([examId, examStudentId])
   @@index([studentId])
   @@map("exam_registrations")
+}
+
+/// Server copy of a student's work in progress: one row per (seat, question, language).
+/// `revision` comes from the client and only ever goes up, so a delayed or replayed save
+/// can never overwrite newer code.
+model StudentDraft {
+  id             String           @id @default(uuid()) @db.Uuid
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  examQuestionId String           @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  language       Language
+  code           String
+  revision       Int
+  savedAt        DateTime         @default(now()) @map("saved_at")
+
+  @@unique([registrationId, examQuestionId, language])
+  @@map("student_drafts")
+}
+
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  ACCEPTED
+  WRONG_ANSWER
+  COMPILE_ERROR
+  RUNTIME_ERROR
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  INTERNAL_ERROR
+}
+
+/// An accepted, immutable snapshot of a student's answer. Only `status` may change later
+/// (when grading runs); the code, language and hash are fixed by a database trigger.
+model Submission {
+  id                 String           @id @default(uuid()) @db.Uuid
+  registrationId     String           @map("registration_id") @db.Uuid
+  registration       ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId     String           @map("exam_question_id") @db.Uuid
+  examQuestion       ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  /// 1, 2, 3… per seat and question. Unique, so two racing submits can't both take the last slot.
+  sequence           Int
+  /// Chosen by the client so a retried request after a network drop doesn't submit twice.
+  clientSubmissionId String           @map("client_submission_id") @db.Uuid
+  language           Language
+  code               String
+  codeSha256         String           @map("code_sha256")
+  status             SubmissionStatus @default(QUEUED)
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@unique([registrationId, examQuestionId, sequence])
+  @@unique([registrationId, clientSubmissionId])
+  @@index([examQuestionId])
+  @@map("submissions")
 }

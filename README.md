@@ -53,9 +53,31 @@ Staff routes (bearer token from `POST /v1/auth/login`):
 | `POST .../registrations/:rid/reset-pin`, `PUT .../:rid/extension`                    | invigilator+, host+                     | Unlock a seat with a new PIN; give extra time.                         |
 | `GET/POST/PATCH /v1/staff`                                                           | admin                                   | Staff accounts and roles.                                              |
 
-Student routes (token from `POST /v1/student/session` with access code, student ID and PIN):
-`GET /v1/student/exam`, `POST /v1/student/exam/enter`, `GET /v1/student/exam/questions/:id`,
-`POST /v1/student/exam/finish`. Hidden test cases never reach these routes.
+Student routes (token from `POST /v1/student/session` with access code, student ID and PIN). All are
+scoped to the caller's own seat; hidden test cases never reach them.
+
+| Route                                                       | Purpose                                                                                |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET /v1/student/exam`, `POST .../enter`, `POST .../finish` | Overview with server time and clock, enter the exam, finish early.                     |
+| `GET /v1/student/exam/questions/:id`                        | Question with samples and the languages allowed for it.                                |
+| `POST /v1/student/exam/next`                                | Sequential exams: move to the next question (no way back).                             |
+| `GET /v1/student/exam/drafts`, `PUT .../drafts/:id/:lang`   | Server drafts per question and language; an older revision is refused (`STALE_DRAFT`). |
+| `POST /v1/student/exam/questions/:id/run`                   | Run code on the student's own input through Judge0.                                    |
+| `POST /v1/student/exam/questions/:id/submissions`           | Immutable submission snapshot; retries with the same client ID return the same one.    |
+| `GET /v1/student/exam/submissions[/:id]`                    | The student's own submissions and their status.                                        |
+
+See [ADR 0005](docs/adr/0005-student-drafts-and-submissions.md) for how drafts, sync and
+submissions fit together.
+
+### Pointing the student app at a server
+
+The student app looks for the exam server in this order: the `SECURELAB_API_URL` environment
+variable, a `config.json` next to `SecureLab.exe` (lab IT sets this once per PC), a `config.json`
+in the user's app data folder, then `http://localhost:3000`:
+
+```json
+{ "apiUrl": "http://exam-server.lab:3000" }
+```
 
 ## Checks
 

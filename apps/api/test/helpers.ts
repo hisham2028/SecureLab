@@ -1,4 +1,4 @@
-import { Test } from "@nestjs/testing";
+import { Test, type TestingModuleBuilder } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { randomUUID } from "node:crypto";
@@ -9,10 +9,12 @@ import { hashPassword } from "../src/auth/auth.service";
 
 export const describeDb = process.env.DATABASE_URL ? describe : describe.skip;
 
-export async function createTestApp(): Promise<{ app: INestApplication; prisma: PrismaService }> {
+export async function createTestApp(
+  customize: (b: TestingModuleBuilder) => TestingModuleBuilder = (b) => b,
+): Promise<{ app: INestApplication; prisma: PrismaService }> {
   process.env.JWT_SECRET ??= "test-secret-test-secret-test-secret-123";
   process.env.JUDGE0_URL ??= "http://localhost:2358";
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await customize(Test.createTestingModule({ imports: [AppModule] })).compile();
   const app = moduleRef.createNestApplication();
   configureApp(app, "");
   await app.init();
