@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
@@ -22,7 +23,7 @@ const MAX_OUTPUT_BYTES = 1024 * 1024;
 export interface LocalToolchain {
   cc: string;
   cxx: string;
-  /** Command and leading arguments, e.g. ["py", "-3"] on Windows. */
+  /** Command and leading arguments, e.g. ["py", "-3"], or one full path to python.exe. */
   python: string[];
 }
 
@@ -31,7 +32,9 @@ export function defaultToolchain(env: {
   LOCAL_CXX?: string;
   LOCAL_PYTHON?: string;
 }) {
-  const split = (s: string) => s.trim().split(/\s+/).filter(Boolean);
+  // A full path may contain spaces ("C:\Program Files\..."): keep it whole.
+  const split = (s: string) =>
+    existsSync(s.trim()) ? [s.trim()] : s.trim().split(/\s+/).filter(Boolean);
   return {
     cc: env.LOCAL_CC?.trim() || "gcc",
     cxx: env.LOCAL_CXX?.trim() || "g++",
@@ -57,7 +60,10 @@ interface ProcessResult {
  */
 function childEnv(): NodeJS.ProcessEnv {
   const keep = IS_WINDOWS
-    ? ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT"]
+    ? [
+        ...["PATH", "Path", "PATHEXT", "SystemRoot", "SYSTEMROOT", "SystemDrive", "WINDIR"],
+        ...["TEMP", "TMP", "COMSPEC", "USERPROFILE", "APPDATA", "LOCALAPPDATA"],
+      ]
     : ["PATH", "LANG", "LC_ALL", "TMPDIR"];
   const env: NodeJS.ProcessEnv = { PYTHONIOENCODING: "utf-8", PYTHONDONTWRITEBYTECODE: "1" };
   for (const k of keep) if (process.env[k] !== undefined) env[k] = process.env[k];

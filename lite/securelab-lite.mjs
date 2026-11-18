@@ -48,11 +48,6 @@ function sh(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { cwd: ROOT, stdio: "inherit", shell: IS_WINDOWS, ...opts });
   if (r.status !== 0) die(`"${[cmd, ...args].join(" ")}" failed. Read the messages above.`);
 }
-function works(cmd, args = ["--version"]) {
-  const r = spawnSync(cmd, args, { stdio: "ignore", shell: IS_WINDOWS });
-  return r.status === 0;
-}
-
 function readEnv() {
   if (!existsSync(ENV_FILE)) die("Run setup first:  node lite/securelab-lite.mjs setup");
   const env = {};
@@ -77,17 +72,38 @@ function apiEnv(lite) {
     JUDGE_WORKER_CONCURRENCY: "2",
     CORS_ORIGINS: `http://localhost:${DASHBOARD_PORT}`,
     ...(lite.LOCAL_PYTHON && { LOCAL_PYTHON: lite.LOCAL_PYTHON }),
+    ...(lite.LOCAL_CC && { LOCAL_CC: lite.LOCAL_CC }),
+    ...(lite.LOCAL_CXX && { LOCAL_CXX: lite.LOCAL_CXX }),
   };
 }
 
 // ---------------------------------------------------------------- setup
 
+/**
+ * On Windows, the full path of a program, found the way PowerShell and cmd find it. Node can miss
+ * programs they find (seen with Python's py.exe launcher), so Lite always runs tools by full path.
+ */
+function whereExe(name) {
+  const where = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "where.exe");
+  const r = spawnSync(where, [name], { encoding: "utf8" });
+  if (r.status !== 0) return [];
+  // .exe only: .bat/.cmd shims can't be started without a shell.
+  return r.stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /\.exe$/i.test(l));
+}
+
+/** Candidate commands for a tool: full paths on Windows, plain names elsewhere. */
+function candidates(names) {
+  return IS_WINDOWS ? names.flatMap(whereExe) : names;
+}
+
 function findPython() {
-  for (const cmd of IS_WINDOWS ? ["python", "py -3", "python3"] : ["python3", "python"]) {
-    const [c, ...a] = cmd.split(" ");
-    // No shell: cmd.exe would split the -c program at its spaces. python.exe and py.exe are
-    // real programs, so they start fine without one.
-    const r = spawnSync(c, [...a, "-c", "import sys; print(sys.version_info[0])"], {
+  // On Windows, py.exe (the Python launcher) runs the newest Python 3.
+  for (const cmd of candidates(IS_WINDOWS ? ["python", "py", "python3"] : ["python3", "python"])) {
+    // No shell: cmd.exe would split the -c program at its spaces.
+    const r = spawnSync(cmd, ["-c", "import sys; print(sys.version_info[0])"], {
       encoding: "utf8",
     });
     // Windows ships a "python" that only opens the Microsoft Store; it prints nothing useful.
@@ -96,23 +112,29 @@ function findPython() {
   return null;
 }
 
+function findCompiler(name) {
+  return candidates([name]).find((cmd) => spawnSync(cmd, ["--version"]).status === 0) ?? null;
+}
+
 function checkTools() {
   say("Checking what's installed");
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 22) die(`Node.js 22 or newer is needed; this is ${process.versions.node}.`);
   console.log(`Node.js ${process.versions.node}: OK`);
-  const python = findPython();
-  const cc = works("gcc");
-  const cxx = works("g++");
-  console.log(`Python 3: ${python ? `OK (${python})` : "not found, so Python answers can't run"}`);
-  console.log(`C (gcc): ${cc ? "OK" : "not found, so C answers can't run"}`);
-  console.log(`C++ (g++): ${cxx ? "OK" : "not found, so C++ answers can't run"}`);
-  if (!python && !cc && !cxx) die("Install at least Python or a C/C++ compiler (lite/README.md).");
-  return python;
+  const tools = { python: findPython(), cc: findCompiler("gcc"), cxx: findCompiler("g++") };
+  const show = (found, what) =>
+    found ? `OK (${found})` : `not found, so ${what} answers can't run`;
+  console.log(`Python 3: ${show(tools.python, "Python")}`);
+  console.log(`C (gcc): ${show(tools.cc, "C")}`);
+  console.log(`C++ (g++): ${show(tools.cxx, "C++")}`);
+  if (!tools.python && !tools.cc && !tools.cxx) {
+    die("Install at least Python or a C/C++ compiler (lite/README.md).");
+  }
+  return tools;
 }
 
 async function setup() {
-  const python = checkTools();
+  const tools = checkTools();
 
   say("Database");
   let lite = existsSync(ENV_FILE) ? readEnv() : null;
@@ -137,7 +159,15 @@ async function setup() {
       ADMIN_PASSWORD: `lite-${randomBytes(6).toString("hex")}`,
     };
   }
-  if (python && python !== (IS_WINDOWS ? "python" : "python3")) lite.LOCAL_PYTHON = python;
+  // The exact programs found above, so the API runs the same ones.
+  for (const [key, found] of [
+    ["LOCAL_PYTHON", tools.python],
+    ["LOCAL_CC", tools.cc],
+    ["LOCAL_CXX", tools.cxx],
+  ]) {
+    if (found) lite[key] = found;
+    else delete lite[key];
+  }
   mkdirSync(LITE, { recursive: true });
   writeFileSync(
     ENV_FILE,
