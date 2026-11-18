@@ -48,6 +48,31 @@ container and should not be run on shared serverless hosting.
 4. Point `DOMAIN` and `CORS_ORIGINS` to `https://your-domain.example`.
 5. Run migrations and start the stack:
 
+PowerShell equivalents for the copy and edit steps:
+
+```powershell
+git pull --rebase origin main
+Copy-Item infra/.env.production.example infra/.env.production
+Copy-Item infra/judge0.production.env.example infra/judge0.production.env
+notepad.exe infra/.env.production
+notepad.exe infra/judge0.production.env
+```
+
+If a pull reports divergent branches, use `git pull --rebase origin main` as above. If local
+uncommitted work exists, commit or stash it before rebasing. If `code` is unavailable, open the
+files in Notepad or any text editor instead.
+
+If the templates remain missing after `git pull`, verify that you are in the repository:
+
+```powershell
+Set-Location C:\Users\zisam\SecureLab
+git fetch origin
+git status
+git ls-tree --name-only origin/main infra
+git pull --rebase --autostash origin main
+Get-ChildItem infra\*production*.example
+```
+
 ```sh
 docker compose --env-file infra/.env.production \
   -f infra/docker-compose.production.yml up -d --build
