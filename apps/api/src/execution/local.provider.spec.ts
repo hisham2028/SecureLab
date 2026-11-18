@@ -28,6 +28,9 @@ const req = (language: ExecutionRequest["language"], sourceCode: string, stdin =
   limits,
 });
 
+// Compiling C++ with <iostream> takes about 5 s on Windows CI runners, beyond Jest's default timeout.
+jest.setTimeout(30_000);
+
 describe("LocalProvider (SecureLab Lite)", () => {
   const local = new LocalProvider(tools);
 

@@ -20,6 +20,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -44,9 +45,13 @@ function die(msg) {
 }
 
 /** Runs a command in the foreground; .cmd shims on Windows need a shell. */
-function sh(cmd, args, opts = {}) {
+function sh(cmd, args, { onFail, ...opts } = {}) {
   const r = spawnSync(cmd, args, { cwd: ROOT, stdio: "inherit", shell: IS_WINDOWS, ...opts });
-  if (r.status !== 0) die(`"${[cmd, ...args].join(" ")}" failed. Read the messages above.`);
+  if (r.status !== 0) {
+    die(
+      `"${[cmd, ...args].join(" ")}" failed. Read the messages above.${onFail ? ` ${onFail}` : ""}`,
+    );
+  }
 }
 function readEnv() {
   if (!existsSync(ENV_FILE)) die("Run setup first:  node lite/securelab-lite.mjs setup");
@@ -133,6 +138,20 @@ function checkTools() {
   return tools;
 }
 
+/** True if something (PostgreSQL, we hope) accepts connections on this port. */
+function portOpen(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port: Number(port), timeout: 3000 });
+    const done = (ok) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.on("connect", () => done(true));
+    socket.on("timeout", () => done(false));
+    socket.on("error", () => done(false));
+  });
+}
+
 async function setup() {
   const tools = checkTools();
 
@@ -147,9 +166,12 @@ async function setup() {
       return (value ?? "").trim();
     };
     console.log("SecureLab keeps its data in PostgreSQL, in a new database called securelab_lite.");
-    const pw = await ask(
-      "Password of the 'postgres' user (you chose it when installing PostgreSQL): ",
-    );
+    let pw = "";
+    while (!pw) {
+      pw = await ask("Password of the 'postgres' user (you chose it when installing PostgreSQL): ");
+      if (!pw)
+        console.log("The password can't be empty. PostgreSQL's installer asked you to choose one.");
+    }
     const port = (await ask("PostgreSQL port [5432]: ")) || "5432";
     rl.close();
     lite = {
@@ -168,15 +190,13 @@ async function setup() {
     if (found) lite[key] = found;
     else delete lite[key];
   }
-  mkdirSync(LITE, { recursive: true });
-  writeFileSync(
-    ENV_FILE,
-    "# SecureLab Lite settings, written by setup. Keep this file to yourself.\n" +
-      Object.entries(lite)
-        .map(([k, v]) => `${k}=${v}`)
-        .join("\n") +
-      "\n",
-  );
+  const dbPort = new URL(lite.DATABASE_URL).port || "5432";
+  if (!(await portOpen(dbPort))) {
+    die(
+      `PostgreSQL isn't running on port ${dbPort}. Install PostgreSQL 16 (lite/README.md), or ` +
+        "start it: in PowerShell as administrator, run  Start-Service postgresql*  then run setup again.",
+    );
+  }
 
   say("Installing SecureLab's parts (a few minutes, about 900 MB)");
   sh("corepack", ["pnpm", "install", "--frozen-lockfile"]);
@@ -199,13 +219,30 @@ async function setup() {
   const env = apiEnv(lite);
   sh("corepack", ["pnpm", "--filter", "@securelab/api", "exec", "prisma", "migrate", "deploy"], {
     env,
+    // Settings are saved only once the database works, so a wrong password is asked again.
+    onFail: "If the password was wrong (P1000), just run setup again.",
   });
+  mkdirSync(LITE, { recursive: true });
+  writeFileSync(
+    ENV_FILE,
+    "# SecureLab Lite settings, written by setup. Keep this file to yourself.\n" +
+      Object.entries(lite)
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n") +
+      "\n",
+  );
 
   say("Creating the admin account");
   sh(process.execPath, ["dist/seed.js"], {
     cwd: path.join(ROOT, "apps", "api"),
     shell: false,
-    env: { ...env, SEED_ADMIN_EMAIL: lite.ADMIN_EMAIL, SEED_ADMIN_PASSWORD: lite.ADMIN_PASSWORD },
+    env: {
+      ...env,
+      SEED_ADMIN_EMAIL: lite.ADMIN_EMAIL,
+      SEED_ADMIN_PASSWORD: lite.ADMIN_PASSWORD,
+      // The password in lite/.env is the one start prints, so make the database match it.
+      SEED_RESET_PASSWORD: "1",
+    },
   });
 
   say("Ready");
