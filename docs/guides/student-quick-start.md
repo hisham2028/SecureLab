@@ -34,13 +34,14 @@ and tell the invigilator**. You won't lose marks for a broken PC or network.
 
 ## If something happens
 
-| What happens                          | What to do                                                                 |
-| ------------------------------------- | -------------------------------------------------------------------------- |
-| The PC freezes or restarts            | Tell the invigilator. Sign in again on any PC; your saved work comes back. |
-| "Offline since …" at the top          | Keep working. Your work is saved on this PC and sent when it reconnects.   |
-| "The invigilator has paused the exam" | Wait. The timer is stopped too.                                            |
-| "Your access is paused"               | Raise your hand. Your work is kept.                                        |
-| You pressed Finish by mistake         | Tell the invigilator; they can let you back in.                            |
+| What happens                          | What to do                                                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| The PC freezes or restarts            | Tell the invigilator. Sign in again on any PC; your saved work comes back.                                  |
+| The exam locks your screen            | You can't switch apps. Closing SecureLab submits your code and you need the invigilator to let you back in. |
+| "Offline since …" at the top          | Keep working. Your work is saved on this PC and sent when it reconnects.                                    |
+| "The invigilator has paused the exam" | Wait. The timer is stopped too.                                                                             |
+| "Your access is paused"               | Raise your hand. Your work is kept.                                                                         |
+| You pressed Finish by mistake         | Tell the invigilator; they can let you back in.                                                             |
 
 ## What staff can see
 

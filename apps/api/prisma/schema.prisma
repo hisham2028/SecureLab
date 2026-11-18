@@ -144,6 +144,9 @@ model Exam {
   showSubmissionVerdicts    Boolean            @default(false) @map("show_submission_verdicts")
   /// Upper bound for AI help in this exam; a question can only be stricter.
   aiMode                    AiMode             @default(DISABLED) @map("ai_mode")
+  /// The student app keeps the exam full screen and on top. Closing it submits the student's
+  /// latest code and blocks the seat; coming back (after closing or a crash) needs staff to unblock.
+  lockScreen                Boolean            @default(true) @map("lock_screen")
   /// Server-authoritative timing. All times are server clock.
   startedAt                 DateTime?          @map("started_at")
   pausedAt                  DateTime?          @map("paused_at")
@@ -289,6 +292,8 @@ model ExamRegistration {
   blockedReason     String?          @map("blocked_reason")
   /// An invigilator let this student (back) in after entry closed or after finishing.
   reentryUntil      DateTime?        @map("reentry_until")
+  /// Staff unblocked this seat: the next sign-in to a locked-screen exam is allowed once.
+  rejoinApprovedAt  DateTime?        @map("rejoin_approved_at")
   /// Set when staff ended this student's exam (force finish).
   finishedById      String?          @map("finished_by_id") @db.Uuid
   createdAt         DateTime         @default(now()) @map("created_at")
@@ -455,6 +460,10 @@ enum SessionEventType {
   FOCUS_RETURNED
   RECONNECTED
   PARALLEL_SIGNIN
+  /// Locked-screen exam: the student closed the app (and was blocked).
+  APP_CLOSED
+  /// Locked-screen exam: the student signed in again after the app ended, and was blocked.
+  REJOIN_BLOCKED
 }
 
 /// What the student client and server observed about a seat. Informational, not misconduct.

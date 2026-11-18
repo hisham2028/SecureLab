@@ -14,6 +14,7 @@ const Channel = {
   DraftMarkSynced: "draft:mark-synced",
   EnvironmentInfo: "env:info",
   SystemCheck: "system:check",
+  Lockdown: "exam:lockdown",
 } as const;
 
 /** Narrow, typed bridge. The renderer gets these functions and nothing else from Node/Electron. */
@@ -50,6 +51,7 @@ const bridge = {
     ipcRenderer.invoke(Channel.DraftMarkSynced, seatId, questionId, language, revision, syncedAt),
   environmentInfo: (): Promise<EnvironmentInfo> => ipcRenderer.invoke(Channel.EnvironmentInfo),
   systemCheck: (): Promise<SystemCheck> => ipcRenderer.invoke(Channel.SystemCheck),
+  setLockdown: (on: boolean): Promise<void> => ipcRenderer.invoke(Channel.Lockdown, on),
 };
 
 contextBridge.exposeInMainWorld("securelab", bridge);

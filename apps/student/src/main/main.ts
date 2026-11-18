@@ -6,11 +6,19 @@ import { ApiClient, isAllowedRequest } from "./api-client";
 import { configSources, resolveApiUrl } from "./config";
 
 /**
- * Electron main process. Full-screen here is a convenience, not lockdown: real exam lockdown
- * is an OS / device-management capability planned for release 1.2 (see docs/adr/0002).
+ * Electron main process.
+ *
+ * Locked-screen exams: while the exam screen shows, the window is a kiosk (full screen, no
+ * frame, taskbar hidden), stays on top, can't be minimized and takes focus back when the student
+ * switches away. Closing it asks first; if the student confirms, the server submits their latest
+ * saved code and blocks the seat until an invigilator unblocks it. An app can't stop
+ * Ctrl+Alt+Del or Task Manager; the server handles that case by asking for permission on the
+ * next sign-in. For a full lock, combine with Windows kiosk / assigned access (docs/adr/0002).
  */
 const devUrl = process.env.SECURELAB_DEV_URL;
 const isDev = Boolean(devUrl) && !app.isPackaged;
+/** Development and automated tests only; a packaged app always locks. */
+const lockdownDisabled = !app.isPackaged && process.env.SECURELAB_NO_LOCKDOWN === "1";
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -116,7 +124,63 @@ function registerIpc(): void {
     apiUrl: api.baseUrl.origin + api.baseUrl.pathname.replace(/\/$/, ""),
   }));
   ipcMain.handle(IpcChannel.SystemCheck, () => systemCheck());
+  ipcMain.handle(IpcChannel.Lockdown, (e, on: unknown) => {
+    if (typeof on !== "boolean") throw new Error("Invalid lockdown flag");
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (win) lock.set(win, on);
+  });
 }
+
+/** The exam lock for the one app window. */
+const lock = {
+  on: false,
+  /** A dialog of ours is open: don't steal focus from it. */
+  asking: false,
+  /** The student confirmed leaving: let the window close. */
+  leaving: false,
+
+  set(win: BrowserWindow, on: boolean): void {
+    if (lockdownDisabled || win.isDestroyed() || this.on === on) return;
+    this.on = on;
+    win.setKiosk(on);
+    win.setAlwaysOnTop(on, "screen-saver");
+    win.setMinimizable(!on);
+    if (on) this.refocus(win);
+  },
+
+  refocus(win: BrowserWindow): void {
+    if (!this.on || this.asking || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.moveTop();
+    win.focus();
+  },
+
+  /** Attempted close while locked: confirm, tell the server, then close for real. */
+  async confirmLeave(win: BrowserWindow): Promise<void> {
+    if (this.asking) return;
+    this.asking = true;
+    const { response } = await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["Leave the exam", "Keep working"],
+      defaultId: 1,
+      cancelId: 1,
+      title: "Leave the exam?",
+      message: "Leave the exam?",
+      detail:
+        "Your latest saved code will be submitted for every question. You can't come back " +
+        "to this exam unless the invigilator lets you back in.",
+    });
+    this.asking = false;
+    if (response !== 0) return this.refocus(win);
+    this.leaving = true;
+    // If the server can't be reached, leave anyway: the next sign-in still needs permission.
+    await api.request("POST", "/v1/student/exam/leave").catch(() => undefined);
+    this.set(win, false);
+    // destroy(), not close(): skip the "work not on the server yet" prompt; drafts stay on disk.
+    win.destroy();
+  },
+};
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -162,6 +226,21 @@ function createWindow(): void {
   });
 
   win.once("ready-to-show", () => win.show());
+
+  win.on("close", (event) => {
+    if (!lock.on || lock.leaving) return;
+    event.preventDefault();
+    void lock.confirmLeave(win);
+  });
+  // Switching apps, Win+D, or a click on another window: come straight back.
+  win.on("blur", () => setTimeout(() => lock.refocus(win), 100));
+  win.on("minimize", () => lock.refocus(win));
+  // Reloading would drop the student back to sign-in; blocked while locked.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (!lock.on || input.type !== "keyDown") return;
+    const key = input.key.toLowerCase();
+    if (key === "f5" || ((input.control || input.meta) && key === "r")) event.preventDefault();
+  });
 
   if (isDev) {
     void win.loadURL(devUrl!);

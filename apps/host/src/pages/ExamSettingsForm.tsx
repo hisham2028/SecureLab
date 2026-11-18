@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS: ExamSettings = {
   maxSubmissionsPerQuestion: 10,
   showSubmissionVerdicts: false,
   aiMode: "DISABLED",
+  lockScreen: true,
 };
 
 /** <input type="datetime-local"> works in local time without a zone. */
@@ -211,6 +212,18 @@ export function ExamSettingsForm({ formId, initial, idRuleLocked, onSubmit, onDi
             onChange={(e) => set("allowEarlySubmit", e.target.checked)}
           />
           Students can finish early
+        </label>
+        <label className="check check-field">
+          <input
+            type="checkbox"
+            checked={s.lockScreen}
+            onChange={(e) => set("lockScreen", e.target.checked)}
+          />
+          Lock students’ screens
+          <span className="field-hint">
+            The exam stays full screen and on top. Closing the app submits their latest code, and
+            they can only come back when you unblock them.
+          </span>
         </label>
         <label className="check check-field">
           <input

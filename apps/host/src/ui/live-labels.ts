@@ -26,6 +26,8 @@ export const EVENT_LABEL: Record<string, string> = {
   FOCUS_RETURNED: "Came back to the exam window",
   RECONNECTED: "Reconnected",
   PARALLEL_SIGNIN: "Signed in from a second computer",
+  APP_CLOSED: "Closed the exam app (latest code submitted, blocked)",
+  REJOIN_BLOCKED: "Tried to sign in again (blocked until you unblock)",
 };
 
 export const ACTION_LABEL: Record<string, string> = {

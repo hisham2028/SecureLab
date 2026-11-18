@@ -52,6 +52,13 @@ test can't be published.
 - **AI help**: the most any question in this exam allows (_Off_, _Hints only_ or _Full help_).
   Each student can ask the AI 10 times per question. Try the AI on your own questions before
   turning it on: a free model on the exam server can take up to a minute to answer.
+- **Lock students' screens** (on for new exams): during the exam SecureLab stays full screen and
+  on top, and a student who switches away is brought straight back. If a student closes the app,
+  their latest saved code is submitted for every question and their seat is blocked. To let them
+  back in, open their seat and press **Unblock**; they then have 30 minutes to sign in again. The
+  same applies if the app ends any other way (a crash, a restart, Task Manager), because a
+  program can't stop those. For a complete lock, ask IT to also set up Windows kiosk mode on the
+  lab PCs ([lab PC guide](lab-pc-install.md#optional-lock-down-the-pc)).
 - **Instructions for students**: shown on their screen before the start.
 
 **Questions tab → Choose questions from the bank**, set the **points** for each and order them.
@@ -102,6 +109,9 @@ Click a student to open their seat: timeline, submissions, notes, and the action
 each question shows how many times the student asked it, and hosts can press **Read the
 conversation** to see each question, the code that was sent and the answer. Invigilators only see
 the count.
+
+With locked screens, a student who closed the app or signed in again shows as **Blocked** with
+the reason. Check with them, then **Unblock**.
 
 "Left the exam window" and "Reconnected" are facts, not misconduct. Nothing happens to a student
 automatically; only staff can block someone, always with a reason.

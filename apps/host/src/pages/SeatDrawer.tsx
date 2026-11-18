@@ -312,7 +312,11 @@ export function SeatDrawer({
       <ReasonDialog
         open={action === "unblock"}
         title={`Unblock ${name}?`}
-        body="They can carry on where they left off."
+        body={
+          exam.lockScreen
+            ? "They can sign in again within 30 minutes and carry on where they left off."
+            : "They can carry on where they left off."
+        }
         confirmLabel="Unblock"
         onConfirm={async (reason) => {
           await api.unblockSeat(exam.id, registrationId!, reason);
@@ -430,7 +434,9 @@ function Timeline({ detail }: { detail: SeatDetail }) {
         (e.type === "RECONNECTED" && e.details?.offlineSeconds
           ? ` after ${Math.round(Number(e.details.offlineSeconds))} s offline`
           : ""),
-      tone: e.type === "PARALLEL_SIGNIN" ? "text-warning" : "",
+      tone: ["PARALLEL_SIGNIN", "APP_CLOSED", "REJOIN_BLOCKED"].includes(e.type)
+        ? "text-warning"
+        : "",
     })),
     ...detail.actions.map((a) => ({
       at: a.createdAt,

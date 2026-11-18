@@ -1,11 +1,12 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import type { SessionEventType } from "@prisma/client";
+import type { Exam, ExamRegistration, SessionEventType } from "@prisma/client";
 import { JwtService } from "@nestjs/jwt";
 import {
   normalizeStudentId,
@@ -27,9 +28,24 @@ import { credentialVersion, hashPin, MAX_PIN_FAILURES, verifyPin } from "../regi
 import { studentQuestionView } from "../exams/student-view";
 import { seatBlocked, SeatService, type Seat } from "./seat.service";
 import { StudentAiService } from "./student-ai.service";
+import { submitLatestDrafts } from "./latest-drafts";
+import { studentError } from "./student-errors";
 import { randomUUID } from "node:crypto";
 
 const LOGIN_FAILED = "Exam code, student ID or PIN is incorrect.";
+/** Locked-screen exams: staff see these as the reason a seat is blocked. */
+export const LEFT_EXAM_REASON = "Closed the exam app. Unblock to let them back in.";
+export const REJOIN_REASON =
+  "Signed in again after the exam app closed (crash, restart or forced quit). Unblock to let them back in.";
+const needsRejoinPermission = () =>
+  studentError(
+    HttpStatus.FORBIDDEN,
+    "SEAT_BLOCKED",
+    "You left this exam, so you need the invigilator's permission to come back. " +
+      "Raise your hand. Your work is kept.",
+  );
+/** How long an unblock lets the student sign in again. */
+const REJOIN_APPROVAL_MS = 30 * 60_000;
 const SIGNIN_STATUSES = ["PUBLISHED", "RUNNING", "PAUSED"];
 
 @Injectable()
@@ -50,7 +66,9 @@ export class StudentService {
     const { exam, reg, fail } = await this.verifySeat(accessCode, rawStudentId, pin, cid);
     if (reg.blockedAt) {
       await fail("blocked");
-      throw seatBlocked();
+      throw [LEFT_EXAM_REASON, REJOIN_REASON].includes(reg.blockedReason ?? "")
+        ? needsRejoinPermission()
+        : seatBlocked();
     }
     const settled = await this.exams.settle(exam);
     if (!SIGNIN_STATUSES.includes(settled.status)) {
@@ -64,6 +82,7 @@ export class StudentService {
 
     const sid = randomUUID();
     const now = new Date();
+    await this.requireRejoinPermission(settled, reg, now, fail);
     // Another PC is signed in to this seat right now: worth an invigilator's look.
     if (this.seats.isInside({ exam: settled, reg }) && isOnline(reg.lastSeenAt, now)) {
       await this.prisma.sessionEvent.create({
@@ -93,6 +112,87 @@ export class StudentService {
       kind: "student",
     };
     return { accessToken: await this.jwt.signAsync(principal, { expiresIn: 12 * 3600 }) };
+  }
+
+  /**
+   * Locked-screen exams: a student who already started may only sign in again with staff
+   * permission (an unblock or re-entry in the last 30 minutes). Otherwise closing the app, or
+   * ending it from Task Manager, would be a free way out. The seat is blocked so staff see it.
+   */
+  private async requireRejoinPermission(
+    exam: Exam,
+    reg: ExamRegistration,
+    now: Date,
+    fail: (reason: string) => Promise<void>,
+  ) {
+    if (!exam.lockScreen || !this.seats.isInside({ exam, reg })) return;
+    const approved =
+      reg.rejoinApprovedAt !== null &&
+      now.getTime() - reg.rejoinApprovedAt.getTime() < REJOIN_APPROVAL_MS;
+    if (approved) {
+      // One sign-in per permission.
+      await this.prisma.examRegistration.update({
+        where: { id: reg.id },
+        data: { rejoinApprovedAt: null },
+      });
+      return;
+    }
+    await this.prisma.$transaction([
+      this.prisma.examRegistration.updateMany({
+        where: { id: reg.id, blockedAt: null },
+        data: { blockedAt: now, blockedReason: REJOIN_REASON },
+      }),
+      this.prisma.sessionEvent.create({
+        data: { registrationId: reg.id, type: "REJOIN_BLOCKED", occurredAt: now },
+      }),
+    ]);
+    await fail("rejoin_needs_permission");
+    throw needsRejoinPermission();
+  }
+
+  /**
+   * Locked-screen exams: the student closed the app. Their latest saved code is submitted and the
+   * seat is blocked until staff unblock it. Does nothing outside a running locked-screen exam.
+   */
+  async leave(p: StudentPrincipal, cid?: string) {
+    const { exam, reg } = await this.seats.load(p);
+    if (!exam.lockScreen || !this.seats.isInside({ exam, reg }))
+      return { left: false, submitted: 0 };
+    const now = new Date();
+    const canWork = studentClock(exam, reg, now).canWork;
+    const submitted = await this.prisma.$transaction(async (tx) => {
+      const blocked = await tx.examRegistration.updateMany({
+        where: { id: reg.id, blockedAt: null },
+        data: { blockedAt: now, blockedReason: LEFT_EXAM_REASON, rejoinApprovedAt: null },
+      });
+      if (blocked.count === 0) return [];
+      const subs = canWork
+        ? await submitLatestDrafts(tx, reg.id, {
+            submittedById: null,
+            maxPerQuestion: exam.maxSubmissionsPerQuestion,
+          })
+        : [];
+      await tx.sessionEvent.create({
+        data: {
+          registrationId: reg.id,
+          type: "APP_CLOSED",
+          occurredAt: now,
+          details: { submitted: subs.length },
+        },
+      });
+      return subs;
+    });
+    await this.audit.record({
+      institutionId: exam.institutionId,
+      actorType: "student",
+      actorId: reg.id,
+      action: "student.left_exam",
+      targetType: "exam",
+      targetId: exam.id,
+      metadata: { submitted },
+      correlationId: cid,
+    });
+    return { left: true, submitted: submitted.length };
   }
 
   /**
@@ -173,6 +273,7 @@ export class StudentService {
         navigationPolicy: exam.navigationPolicy,
         allowEarlySubmit: exam.allowEarlySubmit,
         maxSubmissionsPerQuestion: exam.maxSubmissionsPerQuestion,
+        lockScreen: exam.lockScreen,
       },
       seat: {
         registrationId: reg.id,

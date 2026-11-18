@@ -199,6 +199,14 @@ export class StudentController {
     return this.work.getSubmission(p, id);
   }
 
+  /** Locked-screen exams: the app is closing. Submits the latest drafts and blocks the seat. */
+  @StudentRoute()
+  @Post("exam/leave")
+  @HttpCode(200)
+  leave(@CurrentStudent() p: StudentPrincipal, @CorrelationId() cid?: string) {
+    return this.student.leave(p, cid);
+  }
+
   @StudentRoute()
   @Post("exam/finish")
   @HttpCode(200)
