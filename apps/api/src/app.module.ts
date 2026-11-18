@@ -15,6 +15,7 @@ import { LiveModule } from "./live/live.module";
 import { ResultsModule } from "./results/results.module";
 import { StaffModule } from "./staff/staff.controller";
 import { OpsModule } from "./ops/ops.module";
+import { AiModule } from "./ai/ai.module";
 import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
 
 @Module({
@@ -25,6 +26,7 @@ import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
     AuthModule,
     HealthModule,
     ExecutionModule,
+    AiModule,
     StaffModule,
     QuestionsModule,
     ExamsModule,

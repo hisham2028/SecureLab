@@ -895,3 +895,52 @@ button.link.block-link {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* AI help */
+.ai {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+.ai-log {
+  overflow: auto;
+  padding: var(--s3);
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+.ai-exchange {
+  margin-bottom: var(--s3);
+}
+.ai-q {
+  margin: 0 0 var(--s1);
+}
+.ai-a {
+  padding: var(--s2);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ai-a.failed {
+  color: var(--muted);
+}
+.ai-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  min-height: 0;
+}
+.ai-ask label {
+  font-weight: 600;
+  font-size: 12px;
+}
+.ai-ask textarea {
+  flex: 1;
+  min-height: 0;
+}
+.ai-ask .row {
+  flex-wrap: wrap;
+  gap: var(--s2);
+}

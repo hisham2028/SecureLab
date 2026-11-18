@@ -18,6 +18,13 @@ x-api-env: &api-env
   JUDGE_WORKER_CONCURRENCY: ${JUDGE_WORKER_CONCURRENCY:-4}
   JUDGE_ALERT_WAIT_SECONDS: ${JUDGE_ALERT_WAIT_SECONDS:-120}
   MONITORING_RETENTION_DAYS: ${MONITORING_RETENTION_DAYS:-90}
+  # AI help (optional). Empty AI_BASE_URL keeps it off. See "AI help" in deploy/README.md.
+  AI_BASE_URL: ${AI_BASE_URL:-}
+  AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+  AI_API_KEY: ${AI_API_KEY:-}
+  AI_MAX_CONCURRENT: ${AI_MAX_CONCURRENT:-4}
+  AI_QUESTIONS_PER_QUESTION: ${AI_QUESTIONS_PER_QUESTION:-10}
+  AI_RETENTION_DAYS: ${AI_RETENTION_DAYS:-365}
 
 services:
   postgres:
@@ -109,6 +116,18 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # Free, self-hosted AI help. Starts only with --profile ai. Not reachable from outside: the API
+  # talks to it as http://ollama:11434/v1. Pull the model once (deploy/README.md, AI help).
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["ai"]
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: ${AI_MAX_CONCURRENT:-4}
+      OLLAMA_KEEP_ALIVE: 24h
+    volumes: [ollama-data:/root/.ollama]
+
 volumes:
   pgdata: {}
   caddy-data: {}
+  ollama-data: {}

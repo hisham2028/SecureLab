@@ -219,7 +219,7 @@ export class LiveService {
     const reg = await this.seat(examId, registrationId);
     const now = new Date();
     const [row] = await this.rows(exam, [{ reg, status: this.status(exam, reg, now) }], now);
-    const [events, notes, actions, submissions, adjustments, marks, staff] = await Promise.all([
+    const [events, notes, actions, submissions, adjustments, marks, staff, ai] = await Promise.all([
       this.prisma.sessionEvent.findMany({
         where: { registrationId },
         orderBy: { occurredAt: "desc" },
@@ -259,8 +259,14 @@ export class LiveService {
         where: { institutionId: user.institutionId },
         select: { id: true, displayName: true },
       }),
+      this.prisma.aiExchange.groupBy({
+        by: ["examQuestionId"],
+        where: { registrationId, status: { not: "FAILED" } },
+        _count: { _all: true },
+      }),
     ]);
     const name = new Map(staff.map((s) => [s.id, s.displayName]));
+    const aiCount = new Map(ai.map((a) => [a.examQuestionId, a._count._all]));
     return {
       seat: row,
       deadline: studentClock(exam, reg, now).deadline,
@@ -285,6 +291,7 @@ export class LiveService {
       })),
       questions: marks.get(registrationId)!.questions.map((q) => ({
         ...toQuestionResult(q),
+        aiQuestions: aiCount.get(q.examQuestionId) ?? 0,
         adjustments: adjustments
           .filter((a) => a.examQuestionId === q.examQuestionId)
           .map((a) => ({
@@ -316,6 +323,30 @@ export class LiveService {
           })),
       })),
     };
+  }
+
+  async aiExchanges(user: StaffPrincipal, examId: string, registrationId: string) {
+    await this.exams.load(user, examId);
+    await this.seat(examId, registrationId);
+    const rows = await this.prisma.aiExchange.findMany({
+      where: { registrationId },
+      orderBy: { createdAt: "asc" },
+      include: { examQuestion: { select: { ordinal: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      examQuestionId: r.examQuestionId,
+      questionOrdinal: r.examQuestion.ordinal,
+      mode: r.mode,
+      language: r.language,
+      prompt: r.prompt,
+      code: r.code,
+      reply: r.reply,
+      status: r.status,
+      model: r.model,
+      durationMs: r.durationMs,
+      createdAt: r.createdAt,
+    }));
   }
 
   /** Full review of one submission: source, settings and every grading attempt. */

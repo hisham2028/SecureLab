@@ -28,7 +28,11 @@ log.
 - **Scoring**: _Partial marks by test weight_ or _All tests must pass_.
 - **Output check**: _Exact match_, or _Ignore trailing spaces and blank lines_ (kinder for most
   lab exercises).
-- **AI help**: leave **Off**. AI assistance isn't available to students in the pilot.
+- **AI help**: _Off_, _Hints only_ or _Full help_. The exam has the same setting, and the
+  stricter of the two applies. Hints only lets the AI explain errors and suggest an approach but
+  removes any code it writes. Leave it **Off** for marked exams unless the course allows AI help.
+  If AI help isn't set up on the server, a note under the setting says so and students won't
+  see it.
 
 Solve each question yourself in every allowed language before the exam. A question with no hidden
 test can't be published.
@@ -45,6 +49,9 @@ test can't be published.
   counts.
 - **Students can finish early** and **Show verdicts during the exam** (students see "Accepted"
   or "Wrong answer" and how many hidden tests passed, never marks).
+- **AI help**: the most any question in this exam allows (_Off_, _Hints only_ or _Full help_).
+  Each student can ask the AI 10 times per question. Try the AI on your own questions before
+  turning it on: a free model on the exam server can take up to a minute to answer.
 - **Instructions for students**: shown on their screen before the start.
 
 **Questions tab → Choose questions from the bank**, set the **points** for each and order them.
@@ -91,7 +98,10 @@ approved accommodation). It adds to their own deadline only.
    off until you press **Resume**.
 
 Click a student to open their seat: timeline, submissions, notes, and the actions **Block**,
-**Unblock**, **Let back in**, **Extra time** and **End this student's exam**.
+**Unblock**, **Let back in**, **Extra time** and **End this student's exam**. When AI help is on,
+each question shows how many times the student asked it, and hosts can press **Read the
+conversation** to see each question, the code that was sent and the answer. Invigilators only see
+the count.
 
 "Left the exam window" and "Reconnected" are facts, not misconduct. Nothing happens to a student
 automatically; only staff can block someone, always with a reason.

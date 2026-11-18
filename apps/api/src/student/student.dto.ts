@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_CODE_LENGTH, MAX_STDIN_LENGTH } from "@securelab/shared";
+import { MAX_AI_PROMPT_LENGTH, MAX_CODE_LENGTH, MAX_STDIN_LENGTH } from "@securelab/shared";
 
 export const StudentLoginSchema = z.object({
   accessCode: z.string().trim().toUpperCase().min(4).max(16),
@@ -28,6 +28,16 @@ export const SubmitSchema = z.object({
   language: LanguageSchema,
   code: Code.min(1, "There's no code to submit."),
   clientSubmissionId: z.string().uuid(),
+});
+
+export const AiAskSchema = z.object({
+  prompt: z
+    .string()
+    .trim()
+    .min(3, "Type your question first.")
+    .max(MAX_AI_PROMPT_LENGTH, `Keep your question under ${MAX_AI_PROMPT_LENGTH} characters.`),
+  language: LanguageSchema,
+  code: Code,
 });
 
 export const NextQuestionSchema = z.object({ fromQuestionId: z.string().uuid() });

@@ -26,6 +26,11 @@ and tell the invigilator**. You won't lose marks for a broken PC or network.
 - **Only submitted code is marked.** Submit each question before the time runs out.
 - The **timer** at the top comes from the exam server. Changing the PC clock does nothing.
 - In some exams, questions come **one after another**: once you move on, you can't go back.
+- **AI help**, if your teacher allows it for a question, is a tab under the editor. Type a
+  question and press **Ask** (Ctrl+Enter); your current code is sent with it. In _hints only_
+  exams it explains and points you in the right direction but won't write your answer. You have a
+  limited number of questions per exam question, and answers can take up to a minute. If it
+  doesn't answer, carry on without it; a failed answer doesn't use up a question.
 
 ## If something happens
 
@@ -40,7 +45,8 @@ and tell the invigilator**. You won't lose marks for a broken PC or network.
 ## What staff can see
 
 Your code, runs and submissions, which question and language you have open, whether you're
-connected, and when the SecureLab window lost focus. Leaving the window isn't treated as
+connected, when the SecureLab window lost focus, and anything you ask the AI help with the code
+sent with it. Leaving the window isn't treated as
 cheating by itself, and nothing happens to you automatically. The app shows the full list before
 the exam starts.
 

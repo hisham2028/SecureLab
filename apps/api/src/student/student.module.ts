@@ -6,10 +6,11 @@ import { StudentService } from "./student.service";
 import { StudentWorkService } from "./student-work.service";
 import { SeatService } from "./seat.service";
 import { RunLimiter } from "./run-limiter";
+import { StudentAiService } from "./student-ai.service";
 
 @Module({
   imports: [ExamsModule, ExecutionModule],
   controllers: [StudentController],
-  providers: [StudentService, StudentWorkService, SeatService, RunLimiter],
+  providers: [StudentService, StudentWorkService, StudentAiService, SeatService, RunLimiter],
 })
 export class StudentModule {}

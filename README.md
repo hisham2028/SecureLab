@@ -62,22 +62,25 @@ Staff routes (bearer token from `POST /v1/auth/login`):
 | `GET .../submissions/:sid`                                                           | admin, host                             | Submission review: code, attempts, per-test results.                                                                        |
 | `POST .../registrations/:rid/questions/:qid/marks`                                   | admin, host                             | Override or rubric-mark a question. Reason required, history kept.                                                          |
 | `GET .../results`, `POST .../results/finalize`, `.../publish`, `.../hide`            | admin, host                             | Provisional marks and analytics; save, publish or hide a version.                                                           |
+| `GET .../registrations/:rid/ai`                                                      | admin, host                             | A student's AI help conversation: questions, the code sent, answers, mode and model.                                        |
+| `GET /v1/ai/status`                                                                  | all staff                               | Whether AI help is set up on this server, and the model.                                                                    |
 | `GET .../results/:releaseId/export.csv`                                              | admin, host                             | CSV of a saved version.                                                                                                     |
 
 Student routes (token from `POST /v1/student/session` with access code, student ID and PIN). All are
 scoped to the caller's own seat; hidden test cases never reach them.
 
-| Route                                                       | Purpose                                                                                    |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `GET /v1/student/exam`, `POST .../enter`, `POST .../finish` | Overview with server time and clock, enter the exam, finish early.                         |
-| `GET /v1/student/exam/questions/:id`                        | Question with samples and the languages allowed for it.                                    |
-| `POST /v1/student/exam/next`                                | Sequential exams: move to the next question (no way back).                                 |
-| `GET /v1/student/exam/drafts`, `PUT .../drafts/:id/:lang`   | Server drafts per question and language; an older revision is refused (`STALE_DRAFT`).     |
-| `POST /v1/student/exam/questions/:id/run`                   | Run code on the student's own input through Judge0.                                        |
-| `POST /v1/student/exam/questions/:id/submissions`           | Immutable submission snapshot; retries with the same client ID return the same one.        |
-| `GET /v1/student/exam/submissions[/:id]`                    | The student's own submissions and their status.                                            |
-| `POST /v1/student/exam/heartbeat`                           | Presence every 15 s: question and language on screen, focus changes, new announcements.    |
-| `POST /v1/student/result`                                   | The student's own published result (access code, student ID and PIN; 404 until published). |
+| Route                                                       | Purpose                                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /v1/student/exam`, `POST .../enter`, `POST .../finish` | Overview with server time and clock, enter the exam, finish early.                                |
+| `GET /v1/student/exam/questions/:id`                        | Question with samples and the languages allowed for it.                                           |
+| `POST /v1/student/exam/next`                                | Sequential exams: move to the next question (no way back).                                        |
+| `GET /v1/student/exam/drafts`, `PUT .../drafts/:id/:lang`   | Server drafts per question and language; an older revision is refused (`STALE_DRAFT`).            |
+| `POST /v1/student/exam/questions/:id/run`                   | Run code on the student's own input through Judge0.                                               |
+| `POST /v1/student/exam/questions/:id/submissions`           | Immutable submission snapshot; retries with the same client ID return the same one.               |
+| `GET /v1/student/exam/submissions[/:id]`                    | The student's own submissions and their status.                                                   |
+| `GET/POST /v1/student/exam/questions/:id/ai`                | AI help for one question: the student's conversation, and ask (mode and limit set by the server). |
+| `POST /v1/student/exam/heartbeat`                           | Presence every 15 s: question and language on screen, focus changes, new announcements.           |
+| `POST /v1/student/result`                                   | The student's own published result (access code, student ID and PIN; 404 until published).        |
 
 See [ADR 0005](docs/adr/0005-student-drafts-and-submissions.md) for how drafts, sync and
 submissions fit together.
@@ -101,6 +104,19 @@ nothing is acted on automatically. Every host action asks for a reason and is wr
 log with the previous and new state. Marks can be changed by hand or against a rubric with a
 reason; the history is kept. Results are saved as immutable versions and students see only the
 version you publish. See [ADR 0007](docs/adr/0007-monitoring-marks-results.md).
+
+### AI help
+
+Optional and free by default: the API talks to any OpenAI-compatible endpoint, and the deployment
+package runs a coding model on your own server with Ollama (`AI_BASE_URL`, `AI_MODEL`; empty means
+off). The mode per question (off, hints only, full) is the stricter of the exam's and the
+question's, decided on the server. The model never sees hidden tests or who the student is; in
+hints-only mode code is removed from answers; use is capped per question; and every exchange is
+kept for hosts to read. See [ADR 0008](docs/adr/0008-ai-help.md) and the
+[deployment guide](deploy/README.md#6-ai-help-optional-free).
+
+For local development, run `ollama serve`, `ollama pull qwen2.5-coder:7b`, and set
+`AI_BASE_URL=http://127.0.0.1:11434/v1` in `apps/api/.env`.
 
 ### Pointing the student app at a server
 

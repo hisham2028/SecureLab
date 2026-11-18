@@ -376,7 +376,12 @@ export interface SeatDetail {
     metadata: Record<string, unknown> | null;
     createdAt: string;
   }[];
-  questions: (QuestionResult & { adjustments: MarkAdjustment[]; submissions: SeatSubmission[] })[];
+  questions: (QuestionResult & {
+    adjustments: MarkAdjustment[];
+    submissions: SeatSubmission[];
+    /** Questions this student asked AI help about this exam question. */
+    aiQuestions: number;
+  })[];
 }
 
 export interface SubmissionReview {
@@ -433,6 +438,27 @@ export const monitor = (
       pageSize: String(q.pageSize),
     })}`,
   );
+export interface AiExchange {
+  id: string;
+  examQuestionId: string;
+  questionOrdinal: number;
+  mode: "HINTS_ONLY" | "FULL";
+  language: Language;
+  prompt: string;
+  code: string;
+  reply: string;
+  /** FILTERED: hints only, and code was removed from the answer before the student saw it. */
+  status: "ANSWERED" | "FILTERED" | "FAILED";
+  model: string;
+  durationMs: number;
+  createdAt: string;
+}
+
+export const aiExchanges = (examId: string, registrationId: string) =>
+  call<AiExchange[]>(`/v1/exams/${examId}/registrations/${registrationId}/ai`);
+
+export const aiStatus = () => call<{ enabled: boolean; model: string | null }>("/v1/ai/status");
+
 export const seatDetail = (examId: string, registrationId: string) =>
   call<SeatDetail>(`/v1/exams/${examId}/registrations/${registrationId}/detail`);
 export const submissionReview = (examId: string, submissionId: string) =>

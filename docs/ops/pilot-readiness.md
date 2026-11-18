@@ -41,6 +41,10 @@ done on the pilot server.
 - [ ] Restore drill repeated on this server and recorded in
       [backup and restore](backup-restore.md)
 - [x] Retention job scheduled daily (`retention` service)
+- [ ] **(you)** AI help: decide whether the pilot uses it. If yes, start the `ollama` service,
+      pull the model, and have a teacher try it on the pilot questions
+      ([deployment guide](../../deploy/README.md#6-ai-help-optional-free)). If no, leave
+      `AI_BASE_URL` empty.
 - [ ] **(you)** Log alert on `judge_queue_alert` and on `database_unavailable` lines
 - [ ] Server clock synced (NTP). The exam timer comes from the server.
 

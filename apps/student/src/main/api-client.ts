@@ -20,6 +20,8 @@ const LOGIN_PATH = "/v1/student/session";
 const DEFAULT_TIMEOUT_MS = 15_000;
 // Runs wait for the judge; give them its wall-time cap plus headroom.
 const RUN_TIMEOUT_MS = 45_000;
+// AI help can be slow on a small self-hosted model; the server gives up after 90 s by default.
+const AI_TIMEOUT_MS = 120_000;
 
 export function isAllowedRequest(method: unknown, path: unknown): method is HttpMethod {
   return (
@@ -77,7 +79,13 @@ export class ApiClient {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(path.endsWith("/run") ? RUN_TIMEOUT_MS : DEFAULT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(
+          path.endsWith("/run")
+            ? RUN_TIMEOUT_MS
+            : path.endsWith("/ai") && method === "POST"
+              ? AI_TIMEOUT_MS
+              : DEFAULT_TIMEOUT_MS,
+        ),
         redirect: "error",
       });
     } catch {

@@ -18,7 +18,9 @@ import { by, RateLimit } from "../common/rate-limit";
 import type { StudentPrincipal } from "../auth/auth.types";
 import { StudentService } from "./student.service";
 import { StudentWorkService } from "./student-work.service";
+import { StudentAiService } from "./student-ai.service";
 import {
+  AiAskSchema,
   DraftSaveSchema,
   HeartbeatSchema,
   LanguageSchema,
@@ -36,6 +38,7 @@ export class StudentController {
   constructor(
     private readonly student: StudentService,
     private readonly work: StudentWorkService,
+    private readonly ai: StudentAiService,
   ) {}
 
   @Public()
@@ -158,6 +161,27 @@ export class StudentController {
     @CorrelationId() cid?: string,
   ) {
     return this.work.submit(p, id, body, cid);
+  }
+
+  @StudentRoute()
+  @Get("exam/questions/:examQuestionId/ai")
+  aiHistory(
+    @CurrentStudent() p: StudentPrincipal,
+    @Param("examQuestionId", QuestionId) id: string,
+  ) {
+    return this.ai.history(p, id);
+  }
+
+  @StudentRoute()
+  @RateLimit({ name: "student-ai", limit: 6, windowSeconds: 60, key: by.principal })
+  @Post("exam/questions/:examQuestionId/ai")
+  @HttpCode(200)
+  aiAsk(
+    @CurrentStudent() p: StudentPrincipal,
+    @Param("examQuestionId", QuestionId) id: string,
+    @Body(new ZodValidationPipe(AiAskSchema)) body: z.infer<typeof AiAskSchema>,
+  ) {
+    return this.ai.ask(p, id, body);
   }
 
   @StudentRoute()

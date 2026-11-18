@@ -1,4 +1,6 @@
 import type {
+  AiAskResult,
+  AiExchangeView,
   DraftSaveResult,
   HeartbeatRequest,
   HeartbeatResponse,
@@ -87,6 +89,9 @@ export const api = {
     ),
   submission: (id: string) =>
     call<SubmissionDetail>("GET", `/v1/student/exam/submissions/${encodeURIComponent(id)}`),
+  aiHistory: (id: string) => call<AiExchangeView[]>("GET", `${q(id)}/ai`),
+  askAi: (id: string, prompt: string, language: Language, code: string) =>
+    call<AiAskResult>("POST", `${q(id)}/ai`, { prompt, language, code }),
   heartbeat: (body: HeartbeatRequest) =>
     call<HeartbeatResponse>("POST", "/v1/student/exam/heartbeat", body),
   /** A published result; checked with the sign-in details, without signing in. */

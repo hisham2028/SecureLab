@@ -28,6 +28,7 @@ Print this and keep it in the exam room with the
 | You see cheating                         | Write what you saw as a note on the seat. **Block** only if needed, with a reason; their work and clock are kept. |
 | A student finished by mistake            | Open their seat → **Let back in**. Ask the host for extra time if it's fair.                                      |
 | Whole room offline or the server is down | **Pause** the exam, call the incident contact, follow the runbook.                                                |
+| A student says AI help isn't answering   | Tell them to carry on without it. A failed answer doesn't use up a question. Mention it to the host.              |
 | Everyone needs to know something         | **Announce**. It reaches all screens within 15 seconds and can't be undone.                                       |
 
 Extra time and ending the exam are done by the host. Every action asks for a reason; write
