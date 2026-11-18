@@ -61,6 +61,7 @@ jobs:
       # SecureLab Lite runs student code with the PC's own compilers: check it on Windows.
       - run: gcc --version && g++ --version && python --version
         shell: bash
+      - run: pnpm --filter @securelab/shared build
       - run: pnpm --filter @securelab/api exec jest src/execution/local.provider.spec.ts
         env:
           REQUIRE_LOCAL_TOOLS: "1"
