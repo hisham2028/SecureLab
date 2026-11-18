@@ -36,6 +36,32 @@ Run the execution isolation spike against a running Judge0:
 node infra/judge-spike/run-spike.mjs http://localhost:2358
 ```
 
+## Production deployment
+
+Use a Linux VPS with Docker, a public IP, cgroup v1 support (or cgroup v2 booted with
+`systemd.unified_cgroup_hierarchy=0`), and ports 80/443 open. Judge0 requires a privileged
+container and should not be run on shared serverless hosting.
+
+1. Copy `infra/.env.production.example` to `infra/.env.production` and replace every placeholder.
+2. Copy `infra/judge0.production.env.example` to `infra/judge0.production.env`.
+3. Use the same `AUTHN_TOKEN` value in Judge0 and `JUDGE0_AUTH_TOKEN` in the production environment.
+4. Point `DOMAIN` and `CORS_ORIGINS` to `https://your-domain.example`.
+5. Run migrations and start the stack:
+
+```sh
+docker compose --env-file infra/.env.production \
+  -f infra/docker-compose.production.yml up -d --build
+```
+
+The API container applies Prisma migrations at startup. Create the first administrator once the
+stack is healthy:
+
+```sh
+docker compose --env-file infra/.env.production \
+  -f infra/docker-compose.production.yml exec api \
+  pnpm --filter @securelab/api db:seed
+```
+
 ## Checks
 
 ```sh

@@ -1,0 +1,116 @@
+name: securelab-production
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - host
+
+  host:
+    build:
+      context: ..
+      dockerfile: apps/host/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-securelab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-securelab}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_TTL_SECONDS: ${JWT_TTL_SECONDS:-3600}
+      JUDGE0_URL: http://judge0-server:2358
+      JUDGE0_AUTH_TOKEN: ${JUDGE0_AUTH_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.edu}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    command: sh -c "pnpm --filter @securelab/api db:migrate && pnpm --filter @securelab/api start"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      judge0-server:
+        condition: service_started
+
+  postgres:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-securelab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-securelab}
+    volumes:
+      - securelab-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securelab}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    restart: unless-stopped
+    privileged: true
+    env_file: judge0.production.env
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      default:
+      judge0:
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    restart: unless-stopped
+    command: ["./scripts/workers"]
+    privileged: true
+    env_file: judge0.production.env
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    networks:
+      judge0:
+
+  judge0-db:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    env_file: judge0.production.env
+    volumes:
+      - judge0-pgdata:/var/lib/postgresql/data
+    networks:
+      judge0:
+
+  judge0-redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", 'redis-server --appendonly no --requirepass "$$REDIS_PASSWORD"']
+    env_file: judge0.production.env
+    networks:
+      judge0:
+
+networks:
+  judge0: {}
+
+volumes:
+  securelab-pgdata: {}
+  judge0-pgdata: {}
+  caddy-data: {}
+  caddy-config: {}

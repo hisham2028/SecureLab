@@ -5,5 +5,7 @@ release/
 .env
 .env.*
 !.env.example
+!.env.production.example
+judge0.production.env
 *.log
 .DS_Store
