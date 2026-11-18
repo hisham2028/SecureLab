@@ -61,6 +61,12 @@ jobs:
       # SecureLab Lite runs student code with the PC's own compilers: check it on Windows.
       - run: gcc --version && g++ --version && python --version
         shell: bash
+      # The Lite launcher must find the same tools on its own.
+      - run: |
+          node lite/securelab-lite.mjs check | tee lite-check.txt
+          grep -q "Python 3: OK" lite-check.txt
+          grep -q "C (gcc): OK" lite-check.txt
+        shell: bash
       - run: pnpm --filter @securelab/shared build
       - run: pnpm --filter @securelab/api exec jest src/execution/local.provider.spec.ts
         env:

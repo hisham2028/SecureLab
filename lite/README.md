@@ -77,6 +77,7 @@ stay in the database for next time.
 | "The API stopped" right after start    | Usually the PostgreSQL password is wrong. Delete `lite/.env` and run setup again. The full error is in `lite/logs/api.log`. |
 | C or C++ answers show "couldn't grade" | The compiler isn't on PATH. Install w64devkit as above, open a new PowerShell window, and run `gcc --version` to check.     |
 | Python answers show "couldn't grade"   | Reinstall Python with **Add python.exe to PATH** ticked.                                                                    |
+| Not sure which languages will work     | Run `node lite/securelab-lite.mjs check`. It only checks Python and the C/C++ compiler, and changes nothing.                |
 | Port 8080 or 3000 is busy              | Close the other program using it, or restart the PC.                                                                        |
 
 ## What's different from the full version

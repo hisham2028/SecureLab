@@ -4,6 +4,7 @@
 //   node lite/securelab-lite.mjs setup     once: install, build, database, admin account
 //   node lite/securelab-lite.mjs start     server + dashboard + a sample exam + the student app
 //   node lite/securelab-lite.mjs student   one more student app window
+//   node lite/securelab-lite.mjs check     only check which languages will work
 //
 // Student code runs directly on this computer with no sandbox. Use Lite to look around and try
 // things with colleagues, never for a real exam. Guide: lite/README.md.
@@ -84,9 +85,10 @@ function apiEnv(lite) {
 function findPython() {
   for (const cmd of IS_WINDOWS ? ["python", "py -3", "python3"] : ["python3", "python"]) {
     const [c, ...a] = cmd.split(" ");
+    // No shell: cmd.exe would split the -c program at its spaces. python.exe and py.exe are
+    // real programs, so they start fine without one.
     const r = spawnSync(c, [...a, "-c", "import sys; print(sys.version_info[0])"], {
       encoding: "utf8",
-      shell: IS_WINDOWS,
     });
     // Windows ships a "python" that only opens the Microsoft Store; it prints nothing useful.
     if (r.status === 0 && r.stdout.trim() === "3") return cmd;
@@ -94,7 +96,7 @@ function findPython() {
   return null;
 }
 
-async function setup() {
+function checkTools() {
   say("Checking what's installed");
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 22) die(`Node.js 22 or newer is needed; this is ${process.versions.node}.`);
@@ -106,6 +108,11 @@ async function setup() {
   console.log(`C (gcc): ${cc ? "OK" : "not found, so C answers can't run"}`);
   console.log(`C++ (g++): ${cxx ? "OK" : "not found, so C++ answers can't run"}`);
   if (!python && !cc && !cxx) die("Install at least Python or a C/C++ compiler (lite/README.md).");
+  return python;
+}
+
+async function setup() {
+  const python = checkTools();
 
   say("Database");
   let lite = existsSync(ENV_FILE) ? readEnv() : null;
@@ -443,7 +450,8 @@ const command = process.argv[2];
 if (command === "setup") await setup();
 else if (command === "start") await start();
 else if (command === "student") startStudentApp();
+else if (command === "check") checkTools();
 else {
-  console.log("Usage: node lite/securelab-lite.mjs setup | start | student");
+  console.log("Usage: node lite/securelab-lite.mjs setup | start | student | check");
   process.exit(command ? 1 : 0);
 }
