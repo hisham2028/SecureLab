@@ -2,14 +2,15 @@
 
 This folder holds everything needed to run SecureLab on your own servers:
 
-| File                               | What it is                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------------- |
-| `compose.yml`                      | The SecureLab server: database, API, grading worker, HTTPS, backups              |
-| `.env.example`                     | Settings for the SecureLab server (domain, HTTPS, secrets, Judge0 address)       |
-| `Dockerfile.api`, `Dockerfile.web` | Images for the API and worker, and for the dashboard behind Caddy                |
-| `Caddyfile`                        | HTTPS, security headers, `/api` routed to the API, the dashboard everywhere else |
-| `judge0/compose.yml`               | Judge0 on its own machine, where student code runs                               |
-| `judge0/judge0.env.example`        | Settings for Judge0 (passwords and the access token)                             |
+| File                                                          | What it is                                                                       |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `compose.yml`                                                 | The SecureLab server: database, API, grading worker, HTTPS, backups              |
+| `.env.example`                                                | Settings for the SecureLab server (domain, HTTPS, secrets, Judge0 address)       |
+| `Dockerfile.api`, `Dockerfile.web`                            | Images for the API and worker, and for the dashboard behind Caddy                |
+| `Caddyfile`                                                   | HTTPS, security headers, `/api` routed to the API, the dashboard everywhere else |
+| `judge0/compose.yml`                                          | Judge0 on its own machine, where student code runs                               |
+| `judge0/judge0.env.example`                                   | Settings for Judge0 (passwords and the access token)                             |
+| `one-machine.sh`, `one-machine.yml`, `judge0/one-machine.yml` | Both on one machine (pilot, or a VM on a Windows PC)                             |
 
 You need two Linux machines, both with Docker Engine 24 or later and the Compose plugin:
 
@@ -17,6 +18,12 @@ You need two Linux machines, both with Docker Engine 24 or later and the Compose
   staff reach it on ports 80 and 443.
 - **The judge host** (4 CPUs and 8 GB RAM per 4 graders). It runs untrusted student code, so
   keep it separate from the database and reachable only from the SecureLab server.
+
+**Only one machine, or only Windows?** For a pilot, SecureLab and Judge0 can share one Ubuntu
+24.04 machine, including an Ubuntu VM on a Windows PC: `deploy/one-machine.sh` sets everything up
+(with `one-machine.yml` and `judge0/one-machine.yml`, which keep Judge0 off the network). Follow
+the [Windows server guide](../docs/guides/windows-server.md). The rest of this page describes the
+two-machine setup.
 
 The roles of each part and why Judge0 lives apart are in
 [ADR 0003](../docs/adr/0003-execution-judge0.md) and the
@@ -263,3 +270,10 @@ This package was run end to end on one machine with the domain `localhost` and
 - The backup service wrote a backup that restored into a scratch database and passed
   `verify-restore.sh`.
 - Judge0 refused requests without the token (401).
+
+`one-machine.sh` was run on one Linux machine (cgroup v1) with the server's IP address as its
+name and no DNS. It wrote the settings, started Judge0 and SecureLab, answered over HTTPS by
+IP, and Judge0 ran its test program from inside the API container. Port 2358 was not published.
+An 8-student exam through `https://<ip>/api` had 0 errors and all 16 deadline submissions graded.
+Running the script again kept the settings. The VM steps on Windows (Hyper-V, VirtualBox and the
+Ubuntu installer) were not run here.
