@@ -1,0 +1,41 @@
+# Judge0 for production, on its own VM (not the database server). It runs untrusted student code.
+#
+#   cp deploy/judge0/judge0.env.example deploy/judge0/judge0.env   # replace every CHANGE_ME
+#   docker compose -f deploy/judge0/compose.yml up -d
+#
+# Judge0 CE 1.13 needs privileged containers and a cgroup v1 host (ADR 0003). Allow port 2358
+# through the firewall from the SecureLab server only, and from nowhere else.
+name: securelab-judge
+
+services:
+  server:
+    image: judge0/judge0:1.13.1
+    restart: unless-stopped
+    privileged: true
+    env_file: judge0.env
+    ports: ["2358:2358"]
+    depends_on: [judge0-db, judge0-redis]
+
+  workers:
+    image: judge0/judge0:1.13.1
+    restart: unless-stopped
+    command: ["./scripts/workers"]
+    privileged: true
+    env_file: judge0.env
+    depends_on: [judge0-db, judge0-redis]
+
+  # Service names match POSTGRES_HOST and REDIS_HOST in judge0.env.
+  judge0-db:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    env_file: judge0.env
+    volumes: [judge0-pgdata:/var/lib/postgresql/data]
+
+  judge0-redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", 'redis-server --appendonly no --requirepass "$$REDIS_PASSWORD"']
+    env_file: judge0.env
+
+volumes:
+  judge0-pgdata: {}

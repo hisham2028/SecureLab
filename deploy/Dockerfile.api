@@ -1,0 +1,34 @@
+# SecureLab API and grading worker (same image, different command).
+#   docker build -f deploy/Dockerfile.api -t securelab-api .
+# The full Debian image already has OpenSSL, which Prisma's query engine needs.
+FROM node:22.20.0-bookworm AS build
+WORKDIR /app
+RUN corepack enable
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
+COPY scripts ./scripts
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+RUN pnpm install --frozen-lockfile --filter @securelab/api...
+COPY tsconfig*.json ./
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+# Dev dependencies stay: the prisma CLI runs migrations from this image.
+RUN pnpm --filter @securelab/shared build && pnpm --filter @securelab/api build
+
+FROM node:22.20.0-bookworm
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+WORKDIR /app/apps/api
+ENV NODE_ENV=production
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/health/live').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+CMD ["node", "dist/main.js"]

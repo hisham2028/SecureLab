@@ -12,6 +12,7 @@ describe("parseRoute", () => {
       tab: "students",
     });
     expect(parseRoute("#/exams/abc/pins")).toEqual({ page: "pins", id: "abc" });
+    expect(parseRoute("#/staff")).toEqual({ page: "staff" });
     expect(parseRoute("#/questions/new")).toEqual({ page: "question-new" });
     expect(parseRoute("#/questions/q1")).toEqual({ page: "question-edit", id: "q1" });
     expect(parseRoute("#/nope")).toEqual({ page: "not-found" });
@@ -36,5 +37,15 @@ describe("pins store", () => {
   it("replaces the whole set after a bulk reset", () => {
     replacePins("e1", [c("r1", "00100", "999999")]);
     expect(pinsFor("e1")).toHaveLength(1);
+  });
+});
+
+describe("generatePassword", () => {
+  it("makes long, unambiguous temporary passwords", async () => {
+    const { generatePassword } = await import("./pages/StaffPage");
+    const a = generatePassword();
+    expect(a).toHaveLength(16);
+    expect(a).not.toMatch(/[0O1lI]/);
+    expect(generatePassword()).not.toBe(a);
   });
 });

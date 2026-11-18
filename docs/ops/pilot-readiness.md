@@ -22,19 +22,26 @@ someone at the institution; the rest are in the code and docs.
 
 ## Server
 
+The [deployment package](../../deploy/README.md) sets up most of this; tick each item once it's
+done on the pilot server.
+
 - [ ] **(you)** Server machine chosen. Judge0 on a separate VM from the database (Phase 4
       report).
-- [ ] HTTPS in front of the API (reverse proxy), `TRUST_PROXY` set, and `https://` in the lab's
-      `config.json` (security review S10)
-- [ ] `NODE_ENV=production`, a long random `JWT_SECRET`, and `CORS_ORIGINS` set to the host
-      dashboard's address. The API refuses to start otherwise.
-- [ ] `JUDGE_WORKER_CONCURRENCY=4` per 4-CPU judge host; Judge0 cleanup set to 1 day
-- [ ] Database migrated (`prisma migrate deploy`) and first admin seeded
-- [ ] Nightly backup scheduled, plus one before and after each exam; copies kept off the server
+- [x] HTTPS in front of the API, `TRUST_PROXY` set, security headers (Caddy in
+      `deploy/compose.yml`, security review S10)
+- [ ] **(you)** HTTPS certificate chosen (institution certificate, Let's Encrypt, or Caddy's
+      internal root installed on lab PCs) and `https://…/api` in the lab's `config.json`
+- [x] `NODE_ENV=production`, `CORS_ORIGINS` and a required `JWT_SECRET` set by the compose
+      file. The API refuses to start with a short or example secret.
+- [x] `JUDGE_WORKER_CONCURRENCY=4` per 4-CPU judge host (default in `deploy/.env.example`)
+- [ ] Judge0 port 2358 open to the SecureLab server only, with `AUTHN_TOKEN` set
+- [x] Database migrated on every start (`migrate` service); first admin seeded with one command
+- [x] Daily backup scheduled (`backup` service, 30 days kept)
+- [ ] **(you)** Backups copied off the server daily, plus one before and after each exam
 - [ ] Restore drill repeated on this server and recorded in
       [backup and restore](backup-restore.md)
-- [ ] Retention job scheduled daily (`pnpm --filter @securelab/api retention`)
-- [ ] Log alert on `judge_queue_alert` and on `database_unavailable` lines
+- [x] Retention job scheduled daily (`retention` service)
+- [ ] **(you)** Log alert on `judge_queue_alert` and on `database_unavailable` lines
 - [ ] Server clock synced (NTP). The exam timer comes from the server.
 
 ## Lab PCs
@@ -42,7 +49,7 @@ someone at the institution; the rest are in the code and docs.
 - [ ] **(you)** Supported-device check: Windows 10/11, the installer runs, Monaco loads, the app
       reaches the server through the lab firewall
 - [ ] SecureLab installed per-machine by lab IT, with `config.json` next to `SecureLab.exe`
-      (the installed app ignores per-user settings)
+      (the installed app ignores per-user settings). Steps: [lab PC installation](../guides/lab-pc-install.md)
 - [ ] **(you)** Installer code-signed (security review S11), or its SHA-256 checked by lab IT
       against the published value
 - [ ] PC clocks roughly right (not required for timing, but helps when reading logs)
@@ -52,14 +59,18 @@ someone at the institution; the rest are in the code and docs.
 ## People
 
 - [ ] **(you)** Pilot course, lab sessions and support contacts confirmed
-- [ ] **(you)** Teachers and invigilators trained: - create an exam - import students and print PIN slips - start, pause and announce - read the Live tab - extra time, block and unblock, end a student's exam - mark by hand - finalize, publish and hide
-- [ ] **(you)** Students told what is monitored (the app also shows this before the exam)
+- [ ] **(you)** Teachers and invigilators trained with the [teacher guide](../guides/teacher-guide.md)
+      and the [invigilator sheet](../guides/invigilator-sheet.md): - create an exam - import students and print PIN slips - start, pause and announce - read the Live tab - extra time, block and unblock, end a student's exam - mark by hand - finalize, publish and hide
+- [ ] **(you)** Students given the [quick start](../guides/student-quick-start.md), which says what is
+      monitored (the app also shows this before the exam)
 - [ ] **(you)** An incident contact on call during the exam, with the
       [incident runbook](incident-response.md) printed in the room
 - [ ] **(you)** Manual fallback ready: paper or local-editor exam and a USB collection plan if
       the server is down for longer than the exam can be paused
 
 ## Rehearsal (before any graded exam)
+
+Run it with the [rehearsal plan](../guides/rehearsal-plan.md).
 
 - [ ] Full mock exam with the expected number of PCs, including: - a pulled network cable on one PC - a restarted PC - the API restarted once
 - [ ] Afterwards, reconcile: - registered students against students who started and submitted - submissions against graded and failed submissions - marks against the CSV and the published result

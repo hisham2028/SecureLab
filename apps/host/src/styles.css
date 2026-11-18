@@ -986,3 +986,8 @@ dialog::backdrop {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Staff page */
+tr.row-muted td {
+  color: var(--muted);
+}
