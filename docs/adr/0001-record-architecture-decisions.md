@@ -17,4 +17,5 @@ their status changed.
 
 - Hosting model: managed cloud, institution-hosted, or hybrid, and whether lab machines reach the
   backend over a local network.
-- AI assistance provider and data-retention policy.
+- ~~AI assistance provider and data-retention policy.~~ Decided in
+  [ADR 0008](0008-ai-help.md).

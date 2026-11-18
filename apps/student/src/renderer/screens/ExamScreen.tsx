@@ -19,7 +19,8 @@ import { useDrafts } from "../exam/useDrafts";
 import { SaveStatus } from "../exam/SaveStatus";
 import { QuestionList } from "../exam/QuestionList";
 import { QuestionPanel } from "../exam/QuestionPanel";
-import { ConsolePanel, runErrorMessage } from "../exam/ConsolePanel";
+import { ConsolePanel, runErrorMessage, type ConsoleTab } from "../exam/ConsolePanel";
+import { AiPanel } from "../exam/AiPanel";
 import { SnapshotDialog, SubmitDialog } from "../exam/SubmitDialogs";
 import { Dialog } from "../ui/Dialog";
 import { Banner } from "../ui/Banner";
@@ -229,7 +230,7 @@ export function ExamScreen({ overview, onOverview, onFinished }: Props) {
   }
 
   // ---- submissions ------------------------------------------------------------------------
-  const [tab, setTab] = useState<"run" | "submissions">("run");
+  const [tab, setTab] = useState<ConsoleTab>("run");
   const [subs, setSubs] = useState<Record<string, SubmissionSummary[]>>({});
   const loadSubs = useCallback(
     (id: string) =>
@@ -504,8 +505,27 @@ export function ExamScreen({ overview, onOverview, onFinished }: Props) {
               submissions={subs[currentId] ?? null}
               onSubmissions={onSubmissions}
               onView={(id) => void view(id)}
-              tab={tab}
+              tab={tab === "ai" && !question?.ai ? "run" : tab}
               onTab={setTab}
+              ai={
+                question?.id === currentId && question.ai ? (
+                  <AiPanel
+                    questionId={question.id}
+                    access={question.ai}
+                    language={language}
+                    getCode={currentCode}
+                    canWork={canWork}
+                    onRemaining={(remaining) =>
+                      setQuestions((all) => {
+                        const q = all[question.id];
+                        return q?.ai
+                          ? { ...all, [q.id]: { ...q, ai: { ...q.ai, remaining } } }
+                          : all;
+                      })
+                    }
+                  />
+                ) : null
+              }
             />
           )}
         </section>

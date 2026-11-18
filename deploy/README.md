@@ -159,7 +159,49 @@ with a `.sha256` next to each file, and deletes files older than `BACKUP_KEEP_DA
 
   The last check prints row counts for both databases and `restore verified` when they match.
 
-## 6. Day to day
+## 6. AI help (optional, free)
+
+Students can get AI help inside the exam app, per question: **Off**, **Hints only** or **Full**.
+Teachers choose it on each question and on the exam. It is off until you connect a model.
+
+The recommended setup costs nothing and keeps student code on your network: **Ollama**, an
+open-source model server, running a free coding model. It is in the compose file as an
+optional service.
+
+1. Pick a machine. On this server is fine for a pilot. A 7B model needs about 8 GB of free RAM.
+   Without a graphics card an answer takes 10 to 60 seconds; with an NVIDIA GPU, 1 to 5.
+   On a small machine use `qwen2.5-coder:3b` (about 4 GB, faster, weaker answers).
+2. In `deploy/.env`, set `AI_BASE_URL=http://ollama:11434/v1` and `AI_MODEL=qwen2.5-coder:7b`.
+3. Start the stack with the AI profile, then download the model once (about 5 GB):
+
+   ```sh
+   docker compose -f deploy/compose.yml --env-file deploy/.env --profile ai up -d
+   docker compose -f deploy/compose.yml --env-file deploy/.env exec ollama ollama pull qwen2.5-coder:7b
+   ```
+
+4. Check it: in the dashboard, a question's **AI help** setting no longer says "isn't set up".
+   Create a practice exam with AI help on and ask a question from the student app.
+
+Always add `--profile ai` to later `up` commands, or Compose leaves Ollama out.
+
+**Limits.** Each student can ask `AI_QUESTIONS_PER_QUESTION` (10) questions per exam question,
+one at a time, and the server answers `AI_MAX_CONCURRENT` (4) at once; others are told to try
+again shortly. Raise it only if the model machine keeps up. Answers time out after
+`AI_TIMEOUT_SECONDS` (90).
+
+**Other free options.** `AI_BASE_URL` takes any OpenAI-compatible API, so you can also point it
+at a model server elsewhere on your network (Ollama, llama.cpp, vLLM), or at a hosted free tier
+with `AI_API_KEY` set. Before using a hosted service, check its terms: free tiers often keep
+prompts or use them for training, and every prompt includes the exam question and the
+student's code. That needs your institution's approval
+([data and retention](../docs/privacy/data-retention.md)).
+
+**What the model sees and what is kept.** The model gets the question as students see it
+(never hidden tests), the student's current code and their question, and nothing that
+identifies the student. Every exchange is saved; hosts and admins read it in the student's
+seat on the Live tab. The retention job deletes these after `AI_RETENTION_DAYS` (365).
+
+## 7. Day to day
 
 **Logs.** `docker compose … logs -f api worker`. Two lines need someone's attention at once
 during an exam; send them to whatever alerting you have:
@@ -192,7 +234,7 @@ Migrations run before the new API starts. To pin a release, set `SECURELAB_VERSI
 **If something breaks during an exam,** follow the
 [incident runbook](../docs/ops/incident-response.md).
 
-## 7. Before the first exam
+## 8. Before the first exam
 
 Re-run the load test from a machine on the lab network against the real server, with as many
 students as the biggest lab. It creates its own exam and students, so run it before real data

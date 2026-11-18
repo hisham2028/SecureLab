@@ -77,13 +77,13 @@ own.
 
 The route list with roles is in the [README](../../README.md#api-overview). Summary:
 
-| Caller        | Can reach                                                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Anyone        | `/health/*`, `POST /v1/auth/login`, `POST /v1/student/session`, `POST /v1/student/result` (all rate-limited but health)                       |
-| Student token | `/v1/student/exam/**` for its own seat only                                                                                                   |
-| Invigilator   | Read exams; live monitor; announcements, notes, block/unblock, re-entry, extensions, PIN resets                                               |
-| Host          | Everything an invigilator can, plus questions, exams, registrations, marks, results, submission review, force-finish, regrade, grading status |
-| Admin         | Everything a host can, plus staff accounts and ending staff sessions                                                                          |
+| Caller        | Can reach                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anyone        | `/health/*`, `POST /v1/auth/login`, `POST /v1/student/session`, `POST /v1/student/result` (all rate-limited but health)                                                   |
+| Student token | `/v1/student/exam/**` for its own seat only (AI help: 6 requests a minute, per-question cap)                                                                              |
+| Invigilator   | Read exams; live monitor; announcements, notes, block/unblock, re-entry, extensions, PIN resets                                                                           |
+| Host          | Everything an invigilator can, plus questions, exams, registrations, marks, results, submission review, force-finish, regrade, grading status, students' AI conversations |
+| Admin         | Everything a host can, plus staff accounts and ending staff sessions                                                                                                      |
 
 ## Residual risks the pilot accepts
 
@@ -92,4 +92,8 @@ The route list with roles is in the [README](../../README.md#api-overview). Summ
   never acted on automatically.
 - A student can run Python or C on their own input through **Run**. This is inside Judge0's
   sandbox (Phase 4 report).
+- AI help in _hints only_ mode removes code from answers, but a long prose walk-through of a
+  solution can still get through. The model only ever sees what the student can see, never hidden
+  tests or identity, and every exchange is kept for staff (ADR 0008). Use _Off_ where that
+  matters.
 - The team wrote these tests itself (see S12).

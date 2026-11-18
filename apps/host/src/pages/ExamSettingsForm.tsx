@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { StudentIdRuleSchema, validateStudentId } from "@securelab/shared";
 import type { ExamSettings, Language } from "../api";
 import { Field, LANGUAGE_LABEL } from "../ui/bits";
+import { AI_OFF_HINT, useAiEnabled } from "../ui/useAiStatus";
 
 export const DEFAULT_SETTINGS: ExamSettings = {
   title: "",
@@ -47,6 +48,7 @@ export function ExamSettingsForm({ formId, initial, idRuleLocked, onSubmit, onDi
   const [s, setS] = useState<ExamSettings>(initial);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [sampleId, setSampleId] = useState("");
+  const aiEnabled = useAiEnabled();
 
   const set = <K extends keyof ExamSettings>(key: K, value: ExamSettings[K]) => {
     setS((prev) => ({ ...prev, [key]: value }));
@@ -185,7 +187,14 @@ export function ExamSettingsForm({ formId, initial, idRuleLocked, onSubmit, onDi
         </Field>
       </div>
       <div className="row">
-        <Field label="AI help (maximum)" hint="A question can be stricter than this, never looser.">
+        <Field
+          label="AI help (maximum)"
+          hint={
+            aiEnabled === false && s.aiMode !== "DISABLED"
+              ? AI_OFF_HINT
+              : "A question can be stricter than this, never looser. Every question students ask is saved for you to read."
+          }
+        >
           <select
             value={s.aiMode}
             onChange={(e) => set("aiMode", e.target.value as ExamSettings["aiMode"])}

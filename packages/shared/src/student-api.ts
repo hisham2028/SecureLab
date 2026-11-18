@@ -8,6 +8,8 @@ import type { Language, Verdict } from "./execution";
 
 /** Largest source file accepted anywhere (drafts, runs, submissions). Characters, not bytes. */
 export const MAX_CODE_LENGTH = 256 * 1024;
+/** Longest question a student can type to AI help. */
+export const MAX_AI_PROMPT_LENGTH = 2000;
 /** Largest custom input for a "Run". */
 export const MAX_STDIN_LENGTH = 64 * 1024;
 /** Each output stream of a run is cut to this many characters before it reaches the client. */
@@ -75,6 +77,33 @@ export interface StudentQuestion {
   timeLimitMs: number;
   memoryLimitKb: number;
   samples: { ordinal: number; input: string; expectedOutput: string }[];
+  /** AI help for this question, worked out by the server. Null when there is none. */
+  ai: StudentAiAccess | null;
+}
+
+/** How much AI help a question allows. A question can be stricter than its exam, never looser. */
+export type AiMode = "DISABLED" | "HINTS_ONLY" | "FULL";
+
+export interface StudentAiAccess {
+  mode: Exclude<AiMode, "DISABLED">;
+  /** Questions the student can still ask about this question. */
+  remaining: number;
+  limit: number;
+}
+
+/** One question to AI help and its answer, as the student sees it. */
+export interface AiExchangeView {
+  id: string;
+  prompt: string;
+  reply: string;
+  /** FILTERED: hints only, and code was taken out of the answer. */
+  status: "ANSWERED" | "FILTERED" | "FAILED";
+  createdAt: string;
+}
+
+export interface AiAskResult {
+  exchange: AiExchangeView;
+  remaining: number;
 }
 
 export interface ServerDraft {
@@ -144,5 +173,9 @@ export const StudentErrorCode = {
   RunUnavailable: "RUN_UNAVAILABLE",
   /** An invigilator blocked this seat. The client stops and shows the message. */
   SeatBlocked: "SEAT_BLOCKED",
+  /** AI help is off for this question, not set up, or didn't answer. */
+  AiUnavailable: "AI_UNAVAILABLE",
+  /** Too many AI questions: per question, or too many at once. */
+  AiLimit: "AI_LIMIT",
 } as const;
 export type StudentErrorCode = (typeof StudentErrorCode)[keyof typeof StudentErrorCode];

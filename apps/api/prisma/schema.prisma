@@ -239,6 +239,7 @@ model ExamQuestion {
   drafts          StudentDraft[]
   submissions     Submission[]
   markAdjustments MarkAdjustment[]
+  aiExchanges     AiExchange[]
 
   @@unique([examId, ordinal])
   @@unique([examId, questionVersionId])
@@ -297,6 +298,7 @@ model ExamRegistration {
   notes             IncidentNote[]
   markAdjustments   MarkAdjustment[]
   resultEntries     ResultEntry[]
+  aiExchanges       AiExchange[]
 
   @@unique([examId, examStudentId])
   @@index([studentId])
@@ -554,4 +556,37 @@ model ResultEntry {
 
   @@unique([releaseId, registrationId])
   @@map("result_entries")
+}
+
+enum AiExchangeStatus {
+  /// The model answered and the answer was shown as is.
+  ANSWERED
+  /// Hints only: code was removed from the answer before the student saw it.
+  FILTERED
+  /// The model refused, or the provider failed. Doesn't count towards the student's limit.
+  FAILED
+}
+
+/// One question a student asked SecureLab's AI help and what it answered. Kept for staff to
+/// review. Rows are never changed (database trigger); the retention job deletes old ones.
+model AiExchange {
+  id             String           @id @default(uuid()) @db.Uuid
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId String           @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  /// The mode in force when the question was asked (never DISABLED).
+  mode           AiMode
+  language       Language
+  prompt         String
+  /// The student's code sent with the question, as it was then.
+  code           String
+  reply          String
+  status         AiExchangeStatus
+  model          String
+  durationMs     Int              @map("duration_ms")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([registrationId, examQuestionId, createdAt])
+  @@map("ai_exchanges")
 }

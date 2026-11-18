@@ -42,6 +42,23 @@ export function SeatDrawer({
   const [marking, setMarking] = useState<Question | null>(null);
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState<unknown>(null);
+  const [ai, setAi] = useState<api.AiExchange[] | null>(null);
+  const [aiOpen, setAiOpen] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<unknown>(null);
+  useEffect(() => {
+    setAi(null);
+    setAiOpen(null);
+  }, [registrationId]);
+  async function toggleAi(examQuestionId: string) {
+    if (aiOpen === examQuestionId) return setAiOpen(null);
+    setAiOpen(examQuestionId);
+    setAiError(null);
+    try {
+      setAi(await api.aiExchanges(exam.id, registrationId!));
+    } catch (err) {
+      setAiError(err);
+    }
+  }
   const canManage = role === "ADMIN" || role === "HOST";
   const live = exam.status === "RUNNING" || exam.status === "PAUSED";
   const open = ["PUBLISHED", "RUNNING", "PAUSED"].includes(exam.status);
@@ -210,6 +227,32 @@ export function SeatDrawer({
                       </li>
                     ))}
                   </ul>
+                )}
+                {q.aiQuestions > 0 && (
+                  <p className="muted">
+                    Asked AI help {q.aiQuestions} {q.aiQuestions === 1 ? "time" : "times"}.
+                    {canManage && (
+                      <>
+                        {" "}
+                        <button
+                          className="link"
+                          aria-expanded={aiOpen === q.examQuestionId}
+                          onClick={() => void toggleAi(q.examQuestionId)}
+                        >
+                          {aiOpen === q.examQuestionId
+                            ? "Hide the conversation"
+                            : "Read the conversation"}
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                {aiOpen === q.examQuestionId && (
+                  <>
+                    <ErrorBanner error={aiError} />
+                    {!ai && !aiError && <p className="muted">Loading…</p>}
+                    {ai && <AiLog rows={ai.filter((r) => r.examQuestionId === q.examQuestionId)} />}
+                  </>
                 )}
               </section>
             ))}
@@ -541,5 +584,36 @@ function MarkDialog({
         </div>
       )}
     </ReasonDialog>
+  );
+}
+
+const AI_STATUS: Record<api.AiExchange["status"], string | null> = {
+  ANSWERED: null,
+  FILTERED: "Code was removed from this answer (hints only)",
+  FAILED: "No answer reached the student",
+};
+
+/** What a student asked AI help about one question, with the code they had at the time. */
+function AiLog({ rows }: { rows: api.AiExchange[] }) {
+  return (
+    <ol className="ai-log">
+      {rows.map((r) => (
+        <li key={r.id}>
+          <div className="muted">
+            {formatDateTime(r.createdAt)} · {r.mode === "FULL" ? "Full help" : "Hints only"} ·{" "}
+            {LANGUAGE_LABEL[r.language]} · {r.model}, {(r.durationMs / 1000).toFixed(1)} s
+          </div>
+          <p className="ai-prompt">
+            <strong>Asked:</strong> {r.prompt}
+          </p>
+          <div className="ai-reply">{r.reply}</div>
+          {AI_STATUS[r.status] && <p className="text-warning">{AI_STATUS[r.status]}</p>}
+          <details>
+            <summary>Code sent with the question</summary>
+            <pre className="code-block">{r.code || "(empty)"}</pre>
+          </details>
+        </li>
+      ))}
+    </ol>
   );
 }

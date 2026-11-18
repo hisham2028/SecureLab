@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { Language, QuestionContent, QuestionVersion, TestCase } from "../api";
 import { navigate, useDirtyGuard } from "../router";
 import { ErrorBanner, Field, LANGUAGE_LABEL, Notice } from "../ui/bits";
+import { AI_OFF_HINT, useAiEnabled } from "../ui/useAiStatus";
 
 const BLANK: QuestionContent = {
   title: "",
@@ -54,6 +55,7 @@ export function QuestionEditor({ id }: { id?: string }) {
   const [loaded, setLoaded] = useState<QuestionVersion | null>(null);
   const [c, setC] = useState<QuestionContent | null>(id ? null : BLANK);
   const [tagsText, setTagsText] = useState("");
+  const aiEnabled = useAiEnabled();
   const [dirty, setDirty] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -285,7 +287,14 @@ export function QuestionEditor({ id }: { id?: string }) {
               }}
             />
           </Field>
-          <Field label="AI help">
+          <Field
+            label="AI help"
+            hint={
+              aiEnabled === false && c.aiMode !== "DISABLED"
+                ? AI_OFF_HINT
+                : "The exam's AI setting can make this stricter."
+            }
+          >
             <select
               value={c.aiMode}
               onChange={(e) => set("aiMode", e.target.value as QuestionContent["aiMode"])}

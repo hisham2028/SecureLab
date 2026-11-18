@@ -34,6 +34,17 @@ export class LiveController {
     return this.live.monitor(user, examId, query);
   }
 
+  /** What this student asked AI help and what it answered, with the code they sent. */
+  @Get("registrations/:registrationId/ai")
+  @Roles("ADMIN", "HOST")
+  aiExchanges(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("examId", Uuid) examId: string,
+    @Param("registrationId", Uuid) rid: string,
+  ) {
+    return this.live.aiExchanges(user, examId, rid);
+  }
+
   @Get("registrations/:registrationId/detail")
   seat(
     @CurrentStaff() user: StaffPrincipal,

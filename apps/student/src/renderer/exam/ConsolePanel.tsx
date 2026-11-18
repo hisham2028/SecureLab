@@ -1,4 +1,4 @@
-import { useEffect, useId } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import type { RunResult, SubmissionSummary } from "@securelab/shared";
 import { api, ApiError } from "../lib/api";
 import { LANGUAGE_LABEL, RUN_LABEL, SUBMISSION_LABEL, timeOf } from "../lib/labels";
@@ -15,9 +15,13 @@ interface Props {
   submissions: SubmissionSummary[] | null;
   onSubmissions: (s: SubmissionSummary[]) => void;
   onView: (id: string) => void;
-  tab: "run" | "submissions";
-  onTab: (t: "run" | "submissions") => void;
+  tab: ConsoleTab;
+  onTab: (t: ConsoleTab) => void;
+  /** The AI help panel, when this question allows AI help. */
+  ai: ReactNode | null;
 }
+
+export type ConsoleTab = "run" | "submissions" | "ai";
 
 export function ConsolePanel(p: Props) {
   const inputId = useId();
@@ -35,7 +39,7 @@ export function ConsolePanel(p: Props) {
   }, [tab, hasPending, questionId, onSubmissions]);
 
   return (
-    <section className="console" aria-label="Run and submissions">
+    <section className="console" aria-label="Run, submissions and AI help">
       <div className="tabs" role="tablist">
         <button
           type="button"
@@ -57,9 +61,23 @@ export function ConsolePanel(p: Props) {
         >
           Submissions{p.submissions ? ` (${p.submissions.length})` : ""}
         </button>
+        {p.ai && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={p.tab === "ai"}
+            aria-controls="tab-ai"
+            id="tab-ai-btn"
+            onClick={() => p.onTab("ai")}
+          >
+            AI help
+          </button>
+        )}
       </div>
 
-      {p.tab === "run" ? (
+      {p.tab === "ai" && p.ai ? (
+        p.ai
+      ) : p.tab !== "submissions" ? (
         <div className="run" id="tab-run" role="tabpanel" aria-labelledby="tab-run-btn">
           <div className="run-input">
             <label htmlFor={inputId}>Input for your program</label>

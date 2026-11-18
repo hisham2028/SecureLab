@@ -192,6 +192,10 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
           <ul className="rules">
             <li>Your code, runs and submissions, and which question and language you have open.</li>
             <li>
+              If a question allows AI help: what you ask the AI, the code sent with it, and the
+              answer.
+            </li>
+            <li>
               Whether this computer is connected, and when SecureLab stops being the active window.
               A dropped connection or a click outside the window is not treated as cheating on its
               own.

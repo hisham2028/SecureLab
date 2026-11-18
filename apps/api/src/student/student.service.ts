@@ -26,6 +26,7 @@ import type { StudentPrincipal } from "../auth/auth.types";
 import { credentialVersion, hashPin, MAX_PIN_FAILURES, verifyPin } from "../registrations/pin";
 import { studentQuestionView } from "../exams/student-view";
 import { seatBlocked, SeatService, type Seat } from "./seat.service";
+import { StudentAiService } from "./student-ai.service";
 import { randomUUID } from "node:crypto";
 
 const LOGIN_FAILED = "Exam code, student ID or PIN is incorrect.";
@@ -42,6 +43,7 @@ export class StudentService {
     private readonly audit: AuditService,
     private readonly exams: ExamsService,
     private readonly seats: SeatService,
+    private readonly ai: StudentAiService,
   ) {}
 
   async login(accessCode: string, rawStudentId: string, pin: string, cid?: string) {
@@ -272,6 +274,7 @@ export class StudentService {
       timeLimitMs: v.timeLimitMs,
       memoryLimitKb: v.memoryLimitKb,
       samples: v.samples,
+      ai: await this.ai.access(seat, examQuestionId),
     };
   }
 

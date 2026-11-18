@@ -991,3 +991,25 @@ dialog::backdrop {
 tr.row-muted td {
   color: var(--muted);
 }
+
+/* AI help conversation in the seat drawer */
+.ai-log {
+  list-style: none;
+  padding: 0;
+  margin: var(--s2) 0 0;
+}
+.ai-log li + li {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--border);
+}
+.ai-prompt {
+  margin: var(--s1) 0;
+}
+.ai-reply {
+  padding: var(--s2);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

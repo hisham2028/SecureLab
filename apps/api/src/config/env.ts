@@ -17,6 +17,21 @@ const EnvSchema = z.object({
   MONITORING_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
   /** Submissions graded at the same time by one worker process. */
   JUDGE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  /**
+   * AI help: an OpenAI-compatible chat API, such as a self-hosted Ollama
+   * (http://ollama:11434/v1). Empty turns AI help off everywhere.
+   */
+  AI_BASE_URL: z.union([z.literal(""), z.string().url()]).default(""),
+  AI_MODEL: z.string().min(1).default("qwen2.5-coder:7b"),
+  /** Only for hosted services that need a key. A self-hosted Ollama needs none. */
+  AI_API_KEY: z.string().default(""),
+  AI_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(300).default(90),
+  /** Questions answered at the same time; more wait their turn or are told to try again. */
+  AI_MAX_CONCURRENT: z.coerce.number().int().min(1).max(64).default(4),
+  /** Questions each student may ask about each exam question. */
+  AI_QUESTIONS_PER_QUESTION: z.coerce.number().int().min(1).max(100).default(10),
+  /** Retention: days after an exam ends before its AI conversations are deleted. */
+  AI_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
   /** Development convenience: also run a grading worker inside the API process. */
   JUDGE_WORKER_IN_API: z
     .enum(["true", "false"])
