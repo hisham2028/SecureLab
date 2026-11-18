@@ -13,6 +13,7 @@ import { IS_STUDENT_ROUTE } from "./student-route.decorator";
 import type { AuthedRequest, Principal } from "./auth.types";
 import { AuditService } from "../audit/audit.service";
 import { recordDenied } from "./denied";
+import { PrismaService } from "../prisma/prisma.service";
 
 /**
  * Global guard. Every route requires a valid bearer token unless marked @Public().
@@ -23,6 +24,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
     @Optional() private readonly audit?: AuditService,
   ) {}
 
@@ -47,6 +49,23 @@ export class AuthGuard implements CanActivate {
     if (payload.kind !== expected) {
       await recordDenied(this.audit, req, payload, `${payload.kind}_on_${expected}_route`);
       throw new ForbiddenException("You don't have permission to do this.");
+    }
+    if (payload.kind === "staff") {
+      // Tokens are short-lived, but deactivation, a role change or "sign out everywhere" must
+      // take effect at once, so the account is checked on every request (one indexed read).
+      const account = await this.prisma.staffUser.findUnique({
+        where: { id: payload.sub },
+        select: { isActive: true, role: true, tokenVersion: true, institutionId: true },
+      });
+      if (
+        !account ||
+        !account.isActive ||
+        account.institutionId !== payload.institutionId ||
+        account.tokenVersion !== (payload.tv ?? 0)
+      ) {
+        throw new UnauthorizedException("Your session has ended. Sign in again.");
+      }
+      payload.role = account.role;
     }
     req.user = payload;
     return true;

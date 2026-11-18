@@ -58,9 +58,27 @@ export class AuthService {
       sub: user.id,
       institutionId: user.institutionId,
       role: user.role,
+      tv: user.tokenVersion,
       kind: "staff",
     };
     return { accessToken: await this.jwt.signAsync(principal) };
+  }
+
+  /** Ends every session of this account, on every device. */
+  async signOutEverywhere(principal: StaffPrincipal, correlationId?: string): Promise<void> {
+    await this.prisma.staffUser.update({
+      where: { id: principal.sub },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await this.audit.record({
+      institutionId: principal.institutionId,
+      actorType: "staff",
+      actorId: principal.sub,
+      action: "auth.signed_out_everywhere",
+      targetType: "staff",
+      targetId: principal.sub,
+      correlationId,
+    });
   }
 
   async me(principal: StaffPrincipal) {

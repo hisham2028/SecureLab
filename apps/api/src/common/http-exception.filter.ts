@@ -1,4 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 
 /**
@@ -28,6 +29,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message,
           correlationId,
           ...(obj.details !== undefined ? { details: obj.details } : {}),
+        },
+      });
+      return;
+    }
+
+    if (isDatabaseUnavailable(exception)) {
+      // Clients treat 503 as "server unreachable": the student app keeps working locally and
+      // syncs later, so this must not look like a bug in the request.
+      this.logger.error(
+        JSON.stringify({ msg: "database_unavailable", correlationId, path: req.url }),
+      );
+      res.setHeader("Retry-After", "5");
+      res.status(503).json({
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "The server is busy or restarting. Your work is safe; try again in a moment.",
+          correlationId,
         },
       });
       return;
@@ -65,7 +83,22 @@ function httpCode(status: number): string {
       return "UNPROCESSABLE";
     case 429:
       return "RATE_LIMITED";
+    case 503:
+      return "SERVICE_UNAVAILABLE";
     default:
       return status >= 500 ? "INTERNAL" : "ERROR";
   }
+}
+
+/** Connection-level database failures (down, restarting, pool exhausted), not bad queries. */
+export function isDatabaseUnavailable(err: unknown): boolean {
+  if (err instanceof Prisma.PrismaClientInitializationError) return true;
+  if (err instanceof Prisma.PrismaClientRustPanicError) return true;
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return ["P1001", "P1002", "P1008", "P1017", "P2024"].includes(err.code);
+  }
+  if (err instanceof Prisma.PrismaClientUnknownRequestError) {
+    return /connection|terminat|ECONNREFUSED|ECONNRESET/i.test(err.message);
+  }
+  return false;
 }

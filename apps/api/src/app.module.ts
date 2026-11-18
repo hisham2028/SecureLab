@@ -14,6 +14,7 @@ import { JudgeModule } from "./judge/judge.module";
 import { LiveModule } from "./live/live.module";
 import { ResultsModule } from "./results/results.module";
 import { StaffModule } from "./staff/staff.controller";
+import { OpsModule } from "./ops/ops.module";
 import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
 
 @Module({
@@ -32,6 +33,7 @@ import { CorrelationIdMiddleware } from "./common/correlation-id.middleware";
     JudgeModule,
     ResultsModule,
     LiveModule,
+    OpsModule,
   ],
 })
 export class AppModule implements NestModule {

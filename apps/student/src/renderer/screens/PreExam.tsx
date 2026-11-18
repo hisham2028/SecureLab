@@ -188,6 +188,20 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
             </li>
             <li>If anything goes wrong, raise your hand and tell the invigilator.</li>
           </ul>
+          <h3>What the exam staff can see</h3>
+          <ul className="rules">
+            <li>Your code, runs and submissions, and which question and language you have open.</li>
+            <li>
+              Whether this computer is connected, and when SecureLab stops being the active window.
+              A dropped connection or a click outside the window is not treated as cheating on its
+              own.
+            </li>
+            <li>
+              SecureLab does not record your screen, camera, microphone, keystrokes or other apps.
+              Connection and window records are deleted after the exam&apos;s retention period; your
+              marks and submissions are kept as your institution&apos;s exam records.
+            </li>
+          </ul>
           <label className="check" htmlFor={ackId}>
             <input
               id={ackId}

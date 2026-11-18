@@ -11,7 +11,7 @@ integration, built phase by phase from the development roadmap.
 | `apps/student`    | Electron student client (Windows first): sandboxed renderer, Monaco, encrypted local autosave.                 |
 | `packages/shared` | Types and rules shared by all apps: exam lifecycle, custom student ID validation, verdicts.                    |
 | `infra`           | Local docker-compose (Postgres, Redis, Judge0) the Judge0 isolation spike, and the grading benchmarks.         |
-| `docs/adr`        | Architecture decision records.                                                                                 |
+| `docs`            | Architecture decisions (`adr`), security review, privacy and retention, and runbooks for operators (`ops`).    |
 
 ## Getting started
 
@@ -52,7 +52,9 @@ Staff routes (bearer token from `POST /v1/auth/login`):
 | `POST /v1/exams/:id/transitions`                                                     | admin, host (invigilator: pause/resume) | Publish, start, pause, resume, complete, archive.                      |
 | `GET/POST /v1/exams/:id/registrations`, `POST .../import`                            | admin, host                             | Register students; CSV import is all-or-nothing with row-level errors. |
 | `POST .../registrations/:rid/reset-pin`, `PUT .../:rid/extension`                    | invigilator+, host+                     | Unlock a seat with a new PIN; give extra time.                         |
-| `GET/POST/PATCH /v1/staff`                                                           | admin                                   | Staff accounts and roles.                                              |
+| `GET/POST/PATCH /v1/staff`, `POST /v1/staff/:id/end-sessions`                        | admin                                   | Staff accounts and roles; end someone's sessions (reason required).    |
+| `POST /v1/auth/sign-out-everywhere`                                                  | any staff                               | End all of your own sessions.                                          |
+| `GET /v1/ops/grading`                                                                | admin, host                             | Grading queue health and the submissions the judge gave up on.         |
 | `GET /v1/exams/:id/monitor`, `GET .../registrations/:rid/detail`                     | all staff                               | Live exam room (filters, search, paging) and one seat's timeline.      |
 | `GET/POST .../announcements`, `GET/POST .../notes`                                   | all staff                               | Announce to every student; write incident notes (append-only).         |
 | `POST .../registrations/:rid/block`, `.../unblock`, `.../reentry`                    | all staff                               | Block or unblock a seat, or let a finished student back in. Reasoned.  |
@@ -102,13 +104,27 @@ version you publish. See [ADR 0007](docs/adr/0007-monitoring-marks-results.md).
 
 ### Pointing the student app at a server
 
-The student app looks for the exam server in this order: the `SECURELAB_API_URL` environment
-variable, a `config.json` next to `SecureLab.exe` (lab IT sets this once per PC), a `config.json`
-in the user's app data folder, then `http://localhost:3000`:
+The installed student app reads the exam server from `config.json` next to `SecureLab.exe`
+(lab IT sets this once per PC; the per-machine install is not writable by students):
 
 ```json
-{ "apiUrl": "http://exam-server.lab:3000" }
+{ "apiUrl": "https://exam-server.lab" }
 ```
+
+In development it also accepts the `SECURELAB_API_URL` environment variable and a `config.json`
+in the user's app data folder, then falls back to `http://localhost:3000`. Installed builds
+ignore those, so nobody can point a shared lab account at another server.
+
+### Running it for real
+
+Before a pilot, work through the [pilot readiness checklist](docs/ops/pilot-readiness.md). It
+links the [security review](docs/security/security-review.md),
+[data and retention policy](docs/privacy/data-retention.md),
+[reliability and load report](docs/ops/reliability-report.md),
+[backup and restore runbook](docs/ops/backup-restore.md) (`infra/ops/*.sh`) and
+[incident runbook](docs/ops/incident-response.md). In production the API refuses to start
+with the example `JWT_SECRET`, without `CORS_ORIGINS`, or with the grading worker in the API
+process. Sign-in is rate-limited and staff sessions can be ended at once.
 
 ## Checks
 
