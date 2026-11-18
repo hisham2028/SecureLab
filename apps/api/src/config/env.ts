@@ -6,6 +6,16 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  /**
+   * Who runs student code. "judge0" (the default, and the only choice in production) uses the
+   * Judge0 sandbox. "local" runs it directly on this computer with no sandbox: SecureLab Lite,
+   * for trying the app out only.
+   */
+  EXECUTION_PROVIDER: z.enum(["judge0", "local"]).default("judge0"),
+  /** SecureLab Lite only: the compilers to use. Defaults: gcc, g++, python (Windows) or python3. */
+  LOCAL_CC: z.string().optional(),
+  LOCAL_CXX: z.string().optional(),
+  LOCAL_PYTHON: z.string().optional(),
   JUDGE0_URL: z.string().url(),
   JUDGE0_AUTH_TOKEN: z.string().optional().default(""),
   CORS_ORIGINS: z.string().default(""),
@@ -57,6 +67,8 @@ export function validateEnv(raw: Record<string, unknown>): Env {
       problems.push("  JWT_SECRET: still the example value");
     if (!env.CORS_ORIGINS.trim()) problems.push("  CORS_ORIGINS: set the host dashboard's origin");
     if (env.JUDGE_WORKER_IN_API) problems.push("  JUDGE_WORKER_IN_API: run the worker separately");
+    if (env.EXECUTION_PROVIDER === "local")
+      problems.push("  EXECUTION_PROVIDER: local has no sandbox; use judge0");
     if (problems.length) {
       throw new Error(`Unsafe production configuration:\n${problems.join("\n")}`);
     }

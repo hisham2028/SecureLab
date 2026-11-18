@@ -13,6 +13,12 @@ integration, built phase by phase from the development roadmap.
 | `infra`           | Local docker-compose (Postgres, Redis, Judge0) the Judge0 isolation spike, and the grading benchmarks.         |
 | `docs`            | Architecture decisions (`adr`), security review, privacy and retention, and runbooks for operators (`ops`).    |
 
+## Just want to try it?
+
+**SecureLab Lite** runs the whole app on one Windows (or Mac/Linux) PC, with no Docker and no
+Judge0, in about 1.6 GB: `node lite/securelab-lite.mjs setup`, then `start`. It's for looking
+around only, since student code runs without a sandbox. See [lite/README.md](lite/README.md).
+
 ## Getting started
 
 Requires Node 22, pnpm 10 and Docker. **Use pnpm only** (not npm or yarn): the repo pins it in

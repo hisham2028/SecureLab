@@ -18,3 +18,8 @@ bun.lock
 deploy/judge0/judge0.env
 deploy/backups/
 deploy/certs/
+
+# SecureLab Lite: local settings, sample PINs, logs and student app profiles
+lite/demo-students.txt
+lite/logs/
+lite/profiles/
