@@ -9,3 +9,14 @@ release/
 judge0.production.env
 *.log
 .DS_Store
+
+# This repo uses pnpm only (see package.json "packageManager").
+package-lock.json
+yarn.lock
+bun.lockb
+bun.lock
+
+# Production deployment: local secrets, certificates and backups
+deploy/judge0/judge0.env
+deploy/backups/
+deploy/certs/

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import { randomUUID } from "node:crypto";
@@ -58,9 +58,75 @@ export class AuthService {
       sub: user.id,
       institutionId: user.institutionId,
       role: user.role,
+      tv: user.tokenVersion,
       kind: "staff",
     };
     return { accessToken: await this.jwt.signAsync(principal) };
+  }
+
+  /**
+   * Changes your own password. Other sessions end; this one gets a fresh token. Wrong current
+   * passwords count towards the sign-in rate limit and are audited like failed sign-ins.
+   */
+  async changePassword(
+    principal: StaffPrincipal,
+    currentPassword: string,
+    newPassword: string,
+    correlationId?: string,
+  ): Promise<{ accessToken: string }> {
+    const user = await this.prisma.staffUser.findUniqueOrThrow({ where: { id: principal.sub } });
+    const valid = await argon2.verify(user.passwordHash, currentPassword).catch(() => false);
+    if (!valid) {
+      await this.audit.record({
+        institutionId: user.institutionId,
+        actorType: "staff",
+        actorId: user.id,
+        action: "auth.password_change_failed",
+        correlationId,
+      });
+      throw new UnauthorizedException("Your current password is incorrect.");
+    }
+    if (currentPassword === newPassword) {
+      throw new BadRequestException("Choose a password you haven't used here.");
+    }
+    const updated = await this.prisma.staffUser.update({
+      where: { id: user.id },
+      data: { passwordHash: await hashPassword(newPassword), tokenVersion: { increment: 1 } },
+    });
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.id,
+      action: "auth.password_changed",
+      targetType: "staff",
+      targetId: user.id,
+      correlationId,
+    });
+    const next: StaffPrincipal = {
+      sub: updated.id,
+      institutionId: updated.institutionId,
+      role: updated.role,
+      tv: updated.tokenVersion,
+      kind: "staff",
+    };
+    return { accessToken: await this.jwt.signAsync(next) };
+  }
+
+  /** Ends every session of this account, on every device. */
+  async signOutEverywhere(principal: StaffPrincipal, correlationId?: string): Promise<void> {
+    await this.prisma.staffUser.update({
+      where: { id: principal.sub },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await this.audit.record({
+      institutionId: principal.institutionId,
+      actorType: "staff",
+      actorId: principal.sub,
+      action: "auth.signed_out_everywhere",
+      targetType: "staff",
+      targetId: principal.sub,
+      correlationId,
+    });
   }
 
   async me(principal: StaffPrincipal) {

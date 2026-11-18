@@ -1,34 +1,73 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import { IS_PUBLIC } from "./public.decorator";
-import type { AuthedRequest, StaffPrincipal } from "./auth.types";
+import { IS_STUDENT_ROUTE } from "./student-route.decorator";
+import type { AuthedRequest, Principal } from "./auth.types";
+import { AuditService } from "../audit/audit.service";
+import { recordDenied } from "./denied";
+import { PrismaService } from "../prisma/prisma.service";
 
-/** Global guard: every route requires a valid staff bearer token unless marked @Public(). */
+/**
+ * Global guard. Every route requires a valid bearer token unless marked @Public().
+ * Routes are staff-only by default; @StudentRoute() routes are student-only.
+ */
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
-    if (isPublic) return true;
+    const targets = [ctx.getHandler(), ctx.getClass()];
+    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
 
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const [scheme, token] = (req.headers.authorization ?? "").split(" ");
     if (scheme !== "Bearer" || !token) throw new UnauthorizedException("Sign in to continue.");
+
+    let payload: Principal;
     try {
-      const payload = await this.jwt.verifyAsync<StaffPrincipal>(token);
-      if (payload.kind !== "staff") throw new Error("wrong token kind");
-      req.user = payload;
-      return true;
+      payload = await this.jwt.verifyAsync<Principal>(token);
     } catch {
       throw new UnauthorizedException("Your session has expired. Sign in again.");
     }
+
+    const studentRoute =
+      this.reflector.getAllAndOverride<boolean>(IS_STUDENT_ROUTE, targets) ?? false;
+    const expected = studentRoute ? "student" : "staff";
+    if (payload.kind !== expected) {
+      await recordDenied(this.audit, req, payload, `${payload.kind}_on_${expected}_route`);
+      throw new ForbiddenException("You don't have permission to do this.");
+    }
+    if (payload.kind === "staff") {
+      // Tokens are short-lived, but deactivation, a role change or "sign out everywhere" must
+      // take effect at once, so the account is checked on every request (one indexed read).
+      const account = await this.prisma.staffUser.findUnique({
+        where: { id: payload.sub },
+        select: { isActive: true, role: true, tokenVersion: true, institutionId: true },
+      });
+      if (
+        !account ||
+        !account.isActive ||
+        account.institutionId !== payload.institutionId ||
+        account.tokenVersion !== (payload.tv ?? 0)
+      ) {
+        throw new UnauthorizedException("Your session has ended. Sign in again.");
+      }
+      payload.role = account.role;
+    }
+    req.user = payload;
+    return true;
   }
 }

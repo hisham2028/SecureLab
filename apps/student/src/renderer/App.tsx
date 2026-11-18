@@ -1,72 +1,134 @@
-import { useEffect, useRef, useState } from "react";
-import { CodeEditor } from "./CodeEditor";
+import { useCallback, useEffect, useState } from "react";
+import type { StudentOverview, StudentResult } from "@securelab/shared";
+import { api, ApiError, seatBlocked, sessionEnded } from "./lib/api";
+import { useStore } from "./lib/store";
+import { SignIn } from "./screens/SignIn";
+import { PreExam } from "./screens/PreExam";
+import { ExamScreen, type FinishReason } from "./screens/ExamScreen";
+import { Done } from "./screens/Done";
+import { Result } from "./screens/Result";
+import { Blocked } from "./screens/Blocked";
+import { Banner } from "./ui/Banner";
 
-// Placeholder identifiers until exam login exists (Phase 3).
-const ATTEMPT = "demo-attempt";
-const QUESTION = "q1";
-const STARTER = "#include <stdio.h>\n\nint main(void) {\n    return 0;\n}\n";
+type Stage =
+  | { kind: "signin"; notice: string | null }
+  | { kind: "loading" }
+  | { kind: "pre" }
+  | { kind: "exam" }
+  | { kind: "done"; reason: FinishReason }
+  | { kind: "result"; result: StudentResult };
 
-type SaveState =
-  { kind: "idle" } | { kind: "saving" } | { kind: "saved"; at: string } | { kind: "error" };
+/** Where a freshly loaded overview should take the student. */
+function stageFor(o: StudentOverview): Stage {
+  if (o.seat.finished) return { kind: "done", reason: "finished" };
+  if (o.exam.status === "COMPLETED" || o.exam.status === "ARCHIVED")
+    return { kind: "done", reason: "ended" };
+  const live = o.exam.status === "RUNNING" || o.exam.status === "PAUSED";
+  if (o.seat.entered && live) {
+    return o.clock.remainingSeconds === 0 && !o.clock.isPaused
+      ? { kind: "done", reason: "time" }
+      : { kind: "exam" };
+  }
+  return { kind: "pre" };
+}
 
 export function App() {
-  const [code, setCode] = useState<string | null>(null);
-  const [save, setSave] = useState<SaveState>({ kind: "idle" });
-  const [env, setEnv] = useState<string>("");
-  const timer = useRef<number | undefined>(undefined);
+  const [stage, setStage] = useState<Stage>({ kind: "signin", notice: null });
+  const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [serverUrl, setServerUrl] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const ended = useStore(sessionEnded);
+  const blocked = useStore(seatBlocked);
 
   useEffect(() => {
-    const bridge = window.securelab;
-    if (!bridge) {
-      setCode(STARTER);
-      setEnv("Running outside the desktop app: local drafts are off.");
-      return;
-    }
-    void bridge.loadDraft(ATTEMPT, QUESTION).then((d) => setCode(d?.code ?? STARTER));
-    void bridge
-      .environmentInfo()
-      .then((i) =>
-        setEnv(
-          `${i.platform} · app ${i.appVersion} · Electron ${i.electronVersion}` +
-            (i.encryptionAvailable ? "" : " · warning: draft encryption unavailable"),
-        ),
-      );
+    void window.securelab?.environmentInfo().then((i) => setServerUrl(i.apiUrl));
   }, []);
 
-  function onChange(next: string) {
-    setCode(next);
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(async () => {
-      if (!window.securelab) return;
-      setSave({ kind: "saving" });
-      try {
-        const d = await window.securelab.saveDraft(ATTEMPT, QUESTION, next);
-        setSave({ kind: "saved", at: new Date(d.savedAt).toLocaleTimeString() });
-      } catch {
-        setSave({ kind: "error" });
-      }
-    }, 800);
+  // The server ended the session (PIN reset, seat removed): back to sign-in, with the reason.
+  useEffect(() => {
+    if (ended) {
+      setOverview(null);
+      setStage({ kind: "signin", notice: ended });
+      sessionEnded.set(null);
+    }
+  }, [ended]);
+
+  const load = useCallback(async () => {
+    setStage({ kind: "loading" });
+    setLoadError(null);
+    try {
+      const o = await api.overview();
+      setOverview(o);
+      setStage(stageFor(o));
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : "Couldn't load your exam.");
+    }
+  }, []);
+
+  const onOverview = useCallback((o: StudentOverview) => {
+    setOverview(o);
+    // Entering moves the student from the pre-exam page into the exam.
+    setStage((s) => (s.kind === "pre" ? stageFor(o) : s));
+  }, []);
+
+  const signOut = useCallback(() => {
+    void api.signOut();
+    setOverview(null);
+    setStage({ kind: "signin", notice: null });
+  }, []);
+
+  if (!window.securelab) {
+    return (
+      <div className="center-page">
+        <Banner tone="danger">Open SecureLab from the desktop app.</Banner>
+      </div>
+    );
   }
 
-  return (
-    <div className="layout">
-      <header>
-        <strong>SecureLab</strong>
-        <span className="status" aria-live="polite">
-          {save.kind === "saving" && "Saving…"}
-          {save.kind === "saved" && `Saved locally at ${save.at}`}
-          {save.kind === "error" &&
-            "Couldn't save locally. Keep this window open and tell the invigilator."}
-        </span>
-      </header>
-      <main>
-        {code === null ? (
-          <p className="muted">Loading draft…</p>
-        ) : (
-          <CodeEditor value={code} language="c" onChange={onChange} />
-        )}
-      </main>
-      <footer className="muted">{env}</footer>
-    </div>
-  );
+  if (blocked && stage.kind !== "signin" && stage.kind !== "result") {
+    return <Blocked message={blocked} onUnblocked={() => void load()} />;
+  }
+
+  switch (stage.kind) {
+    case "signin":
+      return (
+        <SignIn
+          onSignedIn={() => void load()}
+          onResult={(result) => setStage({ kind: "result", result })}
+          notice={stage.notice}
+          serverUrl={serverUrl}
+        />
+      );
+    case "result":
+      return (
+        <Result result={stage.result} onBack={() => setStage({ kind: "signin", notice: null })} />
+      );
+    case "loading":
+      return (
+        <div className="center-page">
+          {loadError ? (
+            <>
+              <Banner tone="danger">{loadError}</Banner>
+              <button type="button" onClick={() => void load()}>
+                Try again
+              </button>
+            </>
+          ) : (
+            <p className="muted">Loading your exam…</p>
+          )}
+        </div>
+      );
+    case "pre":
+      return <PreExam overview={overview!} onOverview={onOverview} onSignOut={signOut} />;
+    case "exam":
+      return (
+        <ExamScreen
+          overview={overview!}
+          onOverview={onOverview}
+          onFinished={(reason) => setStage({ kind: "done", reason })}
+        />
+      );
+    case "done":
+      return <Done reason={stage.reason} overview={overview} onSignOut={signOut} />;
+  }
 }

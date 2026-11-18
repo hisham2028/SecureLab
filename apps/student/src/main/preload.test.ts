@@ -15,5 +15,7 @@ describe("preload", () => {
 
   it("uses the same channel names as the main process", () => {
     for (const channel of Object.values(IpcChannel)) expect(src).toContain(`"${channel}"`);
+    const inPreload = [...src.matchAll(/^\s+\w+: "([a-z:-]+)",$/gm)].map((m) => m[1]);
+    expect(inPreload.sort()).toEqual(Object.values(IpcChannel).sort());
   });
 });

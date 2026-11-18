@@ -1,5 +1,6 @@
-// SecureLab Phase 1 schema: institutions, staff identities and audit trail.
-// Exams, questions, registrations and submissions arrive in Phase 2+.
+// SecureLab schema.
+// Phase 1: institutions, staff identities, audit trail.
+// Phase 2: exams, versioned question bank, exam question snapshots, students, registrations.
 
 generator client {
   provider = "prisma-client-js"
@@ -24,6 +25,9 @@ model Institution {
   updatedAt DateTime    @updatedAt @map("updated_at")
   staff     StaffUser[]
   auditLogs AuditLog[]
+  exams     Exam[]
+  questions Question[]
+  students  Student[]
 
   @@map("institutions")
 }
@@ -37,6 +41,8 @@ model StaffUser {
   passwordHash  String      @map("password_hash")
   role          StaffRole
   isActive      Boolean     @default(true) @map("is_active")
+  /// Bumped to end every session of this account (sign out everywhere, role change, deactivation).
+  tokenVersion  Int         @default(0) @map("token_version")
   lastLoginAt   DateTime?   @map("last_login_at")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
@@ -62,4 +68,525 @@ model AuditLog {
   @@index([institutionId, createdAt])
   @@index([targetType, targetId])
   @@map("audit_logs")
+}
+
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  RUNNING
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum Language {
+  c
+  cpp
+  python
+}
+
+enum AiMode {
+  DISABLED
+  HINTS_ONLY
+  FULL
+}
+
+enum NavigationPolicy {
+  FREE
+  SEQUENTIAL
+}
+
+/// How a program's output is compared with a test's expected output.
+enum ComparisonMode {
+  /// Byte-for-byte after normalizing line endings.
+  EXACT
+  /// Ignores trailing spaces on each line and trailing blank lines.
+  WHITESPACE
+}
+
+/// How passed tests turn into a question score.
+enum ScoringMode {
+  /// Points in proportion to the weight of passed tests.
+  WEIGHTED
+  /// Full points only when every test passes.
+  ALL_OR_NOTHING
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Exam {
+  id                        String             @id @default(uuid()) @db.Uuid
+  institutionId             String             @map("institution_id") @db.Uuid
+  institution               Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  createdById               String             @map("created_by_id") @db.Uuid
+  title                     String
+  instructions              String             @default("")
+  status                    ExamStatus         @default(DRAFT)
+  /// Short code students type to find the exam. Unique while the exam exists.
+  accessCode                String             @unique @map("access_code")
+  durationMinutes           Int                @map("duration_minutes")
+  scheduledStartAt          DateTime?          @map("scheduled_start_at")
+  /// Minutes after the actual start during which students may still sign in.
+  lateEntryMinutes          Int                @default(15) @map("late_entry_minutes")
+  allowEarlySubmit          Boolean            @default(true) @map("allow_early_submit")
+  /// Host-defined custom student ID rule (validated by @securelab/shared StudentIdRuleSchema).
+  studentIdRule             Json               @map("student_id_rule")
+  allowedLanguages          Language[]         @map("allowed_languages")
+  navigationPolicy          NavigationPolicy   @default(FREE) @map("navigation_policy")
+  maxSubmissionsPerQuestion Int                @default(10) @map("max_submissions_per_question")
+  /// When true, students see each submission's verdict and passed-test count during the exam.
+  /// Scores are never shown before results are published.
+  showSubmissionVerdicts    Boolean            @default(false) @map("show_submission_verdicts")
+  /// Upper bound for AI help in this exam; a question can only be stricter.
+  aiMode                    AiMode             @default(DISABLED) @map("ai_mode")
+  /// Server-authoritative timing. All times are server clock.
+  startedAt                 DateTime?          @map("started_at")
+  pausedAt                  DateTime?          @map("paused_at")
+  pausedSeconds             Int                @default(0) @map("paused_seconds")
+  completedAt               DateTime?          @map("completed_at")
+  /// Optimistic concurrency token; bumped on every update.
+  revision                  Int                @default(1)
+  /// The result release students can see. Null means results are hidden.
+  publishedReleaseId        String?            @map("published_release_id") @db.Uuid
+  resultsPublishedAt        DateTime?          @map("results_published_at")
+  createdAt                 DateTime           @default(now()) @map("created_at")
+  updatedAt                 DateTime           @updatedAt @map("updated_at")
+  questions                 ExamQuestion[]
+  registrations             ExamRegistration[]
+  announcements             Announcement[]
+  notes                     IncidentNote[]
+  releases                  ResultRelease[]
+
+  @@index([institutionId, status])
+  @@map("exams")
+}
+
+/// Bank entry. Content lives in immutable QuestionVersion rows; editing creates a new version.
+model Question {
+  id            String            @id @default(uuid()) @db.Uuid
+  institutionId String            @map("institution_id") @db.Uuid
+  institution   Institution       @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  createdById   String            @map("created_by_id") @db.Uuid
+  latestVersion Int               @default(1) @map("latest_version")
+  archived      Boolean           @default(false)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  versions      QuestionVersion[]
+
+  @@index([institutionId, archived])
+  @@map("questions")
+}
+
+/// Immutable. Never updated or deleted once created (enforced by a DB trigger).
+model QuestionVersion {
+  id               String         @id @default(uuid()) @db.Uuid
+  questionId       String         @map("question_id") @db.Uuid
+  question         Question       @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  version          Int
+  title            String
+  statement        String
+  inputFormat      String         @default("") @map("input_format")
+  outputFormat     String         @default("") @map("output_format")
+  constraints      String         @default("")
+  allowedLanguages Language[]     @map("allowed_languages")
+  timeLimitMs      Int            @map("time_limit_ms")
+  memoryLimitKb    Int            @map("memory_limit_kb")
+  topic            String         @default("")
+  difficulty       Difficulty     @default(MEDIUM)
+  tags             String[]
+  aiMode           AiMode         @default(DISABLED) @map("ai_mode")
+  comparisonMode   ComparisonMode @default(WHITESPACE) @map("comparison_mode")
+  scoringMode      ScoringMode    @default(WEIGHTED) @map("scoring_mode")
+  createdById      String         @map("created_by_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at")
+  testCases        TestCase[]
+  examQuestions    ExamQuestion[]
+
+  @@unique([questionId, version])
+  @@map("question_versions")
+}
+
+/// Immutable with its version. Public cases are samples shown to students; hidden cases never leave the server.
+model TestCase {
+  id                String          @id @default(uuid()) @db.Uuid
+  questionVersionId String          @map("question_version_id") @db.Uuid
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  ordinal           Int
+  isHidden          Boolean         @map("is_hidden")
+  input             String
+  expectedOutput    String          @map("expected_output")
+  weight            Int             @default(1)
+
+  @@unique([questionVersionId, ordinal])
+  @@map("test_cases")
+}
+
+/// Pins an exam to an exact immutable question version, so later bank edits never change the exam.
+model ExamQuestion {
+  id                String          @id @default(uuid()) @db.Uuid
+  examId            String          @map("exam_id") @db.Uuid
+  exam              Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionVersionId String          @map("question_version_id") @db.Uuid
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Restrict)
+  ordinal           Int
+  points            Int
+
+  drafts          StudentDraft[]
+  submissions     Submission[]
+  markAdjustments MarkAdjustment[]
+  aiExchanges     AiExchange[]
+
+  @@unique([examId, ordinal])
+  @@unique([examId, questionVersionId])
+  @@index([questionVersionId])
+  @@map("exam_questions")
+}
+
+/// University identity: one row per real student per institution.
+model Student {
+  id            String             @id @default(uuid()) @db.Uuid
+  institutionId String             @map("institution_id") @db.Uuid
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  /// Normalized custom ID, kept as text so leading zeros survive.
+  studentNumber String             @map("student_number")
+  fullName      String             @map("full_name")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  registrations ExamRegistration[]
+
+  @@unique([institutionId, studentNumber])
+  @@map("students")
+}
+
+/// Exam-attempt identity: a student's seat in one exam, with its own credential.
+model ExamRegistration {
+  id                String           @id @default(uuid()) @db.Uuid
+  examId            String           @map("exam_id") @db.Uuid
+  exam              Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId         String           @map("student_id") @db.Uuid
+  student           Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  /// Copy of the normalized ID used for the per-exam uniqueness rule.
+  examStudentId     String           @map("exam_student_id")
+  pinHash           String           @map("pin_hash")
+  failedPinCount    Int              @default(0) @map("failed_pin_count")
+  lockedAt          DateTime?        @map("locked_at")
+  extensionMinutes  Int              @default(0) @map("extension_minutes")
+  firstEnteredAt    DateTime?        @map("first_entered_at")
+  finishedAt        DateTime?        @map("finished_at")
+  /// SEQUENTIAL exams: index of the question the student is on (0-based, in ordinal order).
+  navigationIndex   Int              @default(0) @map("navigation_index")
+  /// Live monitoring: last heartbeat and where the student is working.
+  lastSeenAt        DateTime?        @map("last_seen_at")
+  currentQuestionId String?          @map("current_question_id") @db.Uuid
+  currentLanguage   Language?        @map("current_language")
+  /// The sign-in session that sent the last heartbeat (detects a second PC).
+  activeSessionId   String?          @map("active_session_id") @db.Uuid
+  blockedAt         DateTime?        @map("blocked_at")
+  blockedReason     String?          @map("blocked_reason")
+  /// An invigilator let this student (back) in after entry closed or after finishing.
+  reentryUntil      DateTime?        @map("reentry_until")
+  /// Set when staff ended this student's exam (force finish).
+  finishedById      String?          @map("finished_by_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at")
+  drafts            StudentDraft[]
+  submissions       Submission[]
+  events            SessionEvent[]
+  notes             IncidentNote[]
+  markAdjustments   MarkAdjustment[]
+  resultEntries     ResultEntry[]
+  aiExchanges       AiExchange[]
+
+  @@unique([examId, examStudentId])
+  @@index([studentId])
+  @@map("exam_registrations")
+}
+
+/// Server copy of a student's work in progress: one row per (seat, question, language).
+/// `revision` comes from the client and only ever goes up, so a delayed or replayed save
+/// can never overwrite newer code.
+model StudentDraft {
+  id             String           @id @default(uuid()) @db.Uuid
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  examQuestionId String           @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  language       Language
+  code           String
+  revision       Int
+  savedAt        DateTime         @default(now()) @map("saved_at")
+
+  @@unique([registrationId, examQuestionId, language])
+  @@map("student_drafts")
+}
+
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  ACCEPTED
+  WRONG_ANSWER
+  COMPILE_ERROR
+  RUNTIME_ERROR
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  INTERNAL_ERROR
+  /// Some hidden tests passed.
+  PARTIAL
+}
+
+/// An accepted, immutable snapshot of a student's answer. Only `status` may change later
+/// (when grading runs); the code, language and hash are fixed by a database trigger.
+model Submission {
+  id                 String           @id @default(uuid()) @db.Uuid
+  registrationId     String           @map("registration_id") @db.Uuid
+  registration       ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId     String           @map("exam_question_id") @db.Uuid
+  examQuestion       ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  /// 1, 2, 3… per seat and question. Unique, so two racing submits can't both take the last slot.
+  sequence           Int
+  /// Chosen by the client so a retried request after a network drop doesn't submit twice.
+  clientSubmissionId String           @map("client_submission_id") @db.Uuid
+  language           Language
+  code               String
+  codeSha256         String           @map("code_sha256")
+  status             SubmissionStatus @default(QUEUED)
+  /// Filled in by grading. Score is out of the exam question's points.
+  score              Decimal?         @db.Decimal(8, 2)
+  maxScore           Int?             @map("max_score")
+  testsPassed        Int?             @map("tests_passed")
+  testsTotal         Int?             @map("tests_total")
+  gradedAt           DateTime?        @map("graded_at")
+  /// Staff member who submitted this on the student's behalf (force finish). Null: the student.
+  submittedById      String?          @map("submitted_by_id") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at")
+  job                JudgeJob?
+  evaluations        Evaluation[]
+
+  @@unique([registrationId, examQuestionId, sequence])
+  @@unique([registrationId, clientSubmissionId])
+  @@index([examQuestionId])
+  @@map("submissions")
+}
+
+enum JudgeJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  /// Gave up after repeated infrastructure failures; a host can queue it again.
+  FAILED
+}
+
+/// Durable grading queue, one job per submission. Workers claim jobs with
+/// SELECT … FOR UPDATE SKIP LOCKED and a lease, so a crashed worker's job is picked up again.
+model JudgeJob {
+  id           String         @id @default(uuid()) @db.Uuid
+  submissionId String         @unique @map("submission_id") @db.Uuid
+  submission   Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  status       JudgeJobStatus @default(QUEUED)
+  attempts     Int            @default(0)
+  /// Raised by a host's "grade again" after the job gave up (each round gets the full retries).
+  attemptLimit Int            @default(5) @map("attempt_limit")
+  runAfter     DateTime       @default(now()) @map("run_after")
+  lockedAt     DateTime?      @map("locked_at")
+  lockedBy     String?        @map("locked_by")
+  lastError    String?        @map("last_error")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, runAfter])
+  @@map("judge_jobs")
+}
+
+enum EvaluationOutcome {
+  COMPLETED
+  /// The judge itself failed (not the student's code). Retried; never turned into a mark.
+  INFRA_ERROR
+}
+
+/// One grading attempt of one submission. Append-only. At most one COMPLETED per submission.
+model Evaluation {
+  id            String            @id @default(uuid()) @db.Uuid
+  submissionId  String            @map("submission_id") @db.Uuid
+  submission    Submission        @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  attempt       Int
+  outcome       EvaluationOutcome
+  verdict       SubmissionStatus?
+  score         Decimal?          @db.Decimal(8, 2)
+  maxScore      Int               @map("max_score")
+  testsPassed   Int               @default(0) @map("tests_passed")
+  testsTotal    Int               @default(0) @map("tests_total")
+  compileOutput String            @default("") @map("compile_output")
+  /// Provider, version, language ID, limits, comparison and scoring mode used. Enough to re-run.
+  settings      Json
+  error         String?
+  workerId      String            @map("worker_id")
+  startedAt     DateTime          @map("started_at")
+  finishedAt    DateTime          @default(now()) @map("finished_at")
+  tests         EvaluationTest[]
+
+  @@unique([submissionId, attempt])
+  @@map("evaluations")
+}
+
+/// Per-test result. Holds verdicts and resource use only, never the program's output.
+model EvaluationTest {
+  id           String           @id @default(uuid()) @db.Uuid
+  evaluationId String           @map("evaluation_id") @db.Uuid
+  evaluation   Evaluation       @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  testCaseId   String           @map("test_case_id") @db.Uuid
+  ordinal      Int
+  weight       Int
+  verdict      SubmissionStatus
+  passed       Boolean
+  timeSeconds  Float?           @map("time_seconds")
+  memoryKb     Int?             @map("memory_kb")
+
+  @@unique([evaluationId, ordinal])
+  @@map("evaluation_tests")
+}
+
+// ---------------------------------------------------------------- Phase 5: monitoring and results
+
+enum SessionEventType {
+  FOCUS_LOST
+  FOCUS_RETURNED
+  RECONNECTED
+  PARALLEL_SIGNIN
+}
+
+/// What the student client and server observed about a seat. Informational, not misconduct.
+model SessionEvent {
+  id             BigInt           @id @default(autoincrement())
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  type           SessionEventType
+  occurredAt     DateTime         @map("occurred_at")
+  receivedAt     DateTime         @default(now()) @map("received_at")
+  details        Json?
+
+  @@index([registrationId, type])
+  @@map("session_events")
+}
+
+model Announcement {
+  id          String   @id @default(uuid()) @db.Uuid
+  examId      String   @map("exam_id") @db.Uuid
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  message     String
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([examId, createdAt])
+  @@map("announcements")
+}
+
+/// Invigilator notes about an exam or one seat. Append-only.
+model IncidentNote {
+  id             String            @id @default(uuid()) @db.Uuid
+  examId         String            @map("exam_id") @db.Uuid
+  exam           Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  registrationId String?           @map("registration_id") @db.Uuid
+  registration   ExamRegistration? @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  authorId       String            @map("author_id") @db.Uuid
+  note           String
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  @@index([examId, createdAt])
+  @@index([registrationId])
+  @@map("incident_notes")
+}
+
+enum MarkAdjustmentKind {
+  OVERRIDE
+  RUBRIC
+}
+
+/// A manual change to one question's mark for one student. Append-only; the latest one counts.
+model MarkAdjustment {
+  id             String             @id @default(uuid()) @db.Uuid
+  registrationId String             @map("registration_id") @db.Uuid
+  registration   ExamRegistration   @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId String             @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion       @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  kind           MarkAdjustmentKind
+  /// The automatic mark when this adjustment was made.
+  autoMark       Decimal            @map("auto_mark") @db.Decimal(8, 2)
+  previousMark   Decimal            @map("previous_mark") @db.Decimal(8, 2)
+  newMark        Decimal            @map("new_mark") @db.Decimal(8, 2)
+  /// RUBRIC: [{ label, points }] added to the automatic mark (points may be negative).
+  rubric         Json?
+  reason         String
+  actorId        String             @map("actor_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  @@index([registrationId, examQuestionId, createdAt])
+  @@map("mark_adjustments")
+}
+
+/// A frozen copy of an exam's results. Students only ever see a published release.
+model ResultRelease {
+  id          String        @id @default(uuid()) @db.Uuid
+  examId      String        @map("exam_id") @db.Uuid
+  exam        Exam          @relation(fields: [examId], references: [id], onDelete: Restrict)
+  version     Int
+  maxTotal    Decimal       @map("max_total") @db.Decimal(10, 2)
+  createdById String        @map("created_by_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  entries     ResultEntry[]
+
+  @@unique([examId, version])
+  @@map("result_releases")
+}
+
+model ResultEntry {
+  id             String           @id @default(uuid()) @db.Uuid
+  releaseId      String           @map("release_id") @db.Uuid
+  release        ResultRelease    @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  studentId      String           @map("student_id")
+  fullName       String           @map("full_name")
+  total          Decimal          @db.Decimal(10, 2)
+  maxTotal       Decimal          @map("max_total") @db.Decimal(10, 2)
+  /// [{ examQuestionId, ordinal, title, points, autoMark, mark, adjusted }]
+  questions      Json
+
+  @@unique([releaseId, registrationId])
+  @@map("result_entries")
+}
+
+enum AiExchangeStatus {
+  /// The model answered and the answer was shown as is.
+  ANSWERED
+  /// Hints only: code was removed from the answer before the student saw it.
+  FILTERED
+  /// The model refused, or the provider failed. Doesn't count towards the student's limit.
+  FAILED
+}
+
+/// One question a student asked SecureLab's AI help and what it answered. Kept for staff to
+/// review. Rows are never changed (database trigger); the retention job deletes old ones.
+model AiExchange {
+  id             String           @id @default(uuid()) @db.Uuid
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId String           @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion     @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  /// The mode in force when the question was asked (never DISABLED).
+  mode           AiMode
+  language       Language
+  prompt         String
+  /// The student's code sent with the question, as it was then.
+  code           String
+  reply          String
+  status         AiExchangeStatus
+  model          String
+  durationMs     Int              @map("duration_ms")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([registrationId, examQuestionId, createdAt])
+  @@map("ai_exchanges")
 }

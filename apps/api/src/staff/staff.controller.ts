@@ -1,0 +1,235 @@
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  HttpCode,
+  Injectable,
+  Module,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from "@nestjs/common";
+import { z } from "zod";
+import { PrismaService } from "../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { Roles } from "../auth/roles.decorator";
+import { CorrelationId, CurrentStaff } from "../auth/current-user.decorator";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { hashPassword } from "../auth/auth.service";
+import { isUniqueViolation } from "../common/prisma-errors";
+import type { StaffPrincipal } from "../auth/auth.types";
+
+const RoleSchema = z.enum(["ADMIN", "HOST", "INVIGILATOR"]);
+const CreateStaffSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  displayName: z.string().trim().min(1).max(200),
+  role: RoleSchema,
+  password: z.string().min(12).max(256),
+});
+const UpdateStaffSchema = z
+  .object({ role: RoleSchema.optional(), isActive: z.boolean().optional() })
+  .strict();
+
+const publicFields = {
+  id: true,
+  email: true,
+  displayName: true,
+  role: true,
+  isActive: true,
+  lastLoginAt: true,
+} as const;
+
+@Injectable()
+export class StaffService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
+
+  list(user: StaffPrincipal) {
+    return this.prisma.staffUser.findMany({
+      where: { institutionId: user.institutionId },
+      select: publicFields,
+      orderBy: { email: "asc" },
+    });
+  }
+
+  async create(user: StaffPrincipal, dto: z.infer<typeof CreateStaffSchema>, cid?: string) {
+    try {
+      const created = await this.prisma.staffUser.create({
+        data: {
+          institutionId: user.institutionId,
+          email: dto.email,
+          displayName: dto.displayName,
+          role: dto.role,
+          passwordHash: await hashPassword(dto.password),
+        },
+        select: publicFields,
+      });
+      await this.audit.record({
+        institutionId: user.institutionId,
+        actorType: "staff",
+        actorId: user.sub,
+        action: "staff.created",
+        targetType: "staff",
+        targetId: created.id,
+        metadata: { role: dto.role },
+        correlationId: cid,
+      });
+      return created;
+    } catch (err) {
+      if (isUniqueViolation(err, "email"))
+        throw new ConflictException("A staff account with this email already exists.");
+      throw err;
+    }
+  }
+
+  async update(
+    user: StaffPrincipal,
+    id: string,
+    dto: z.infer<typeof UpdateStaffSchema>,
+    cid?: string,
+  ) {
+    if (id === user.sub && (dto.role !== undefined || dto.isActive === false)) {
+      throw new ConflictException("You can't change your own role or deactivate yourself.");
+    }
+    const before = await this.prisma.staffUser.findFirst({
+      where: { id, institutionId: user.institutionId },
+    });
+    if (!before) throw new NotFoundException("Staff account not found.");
+    // A role change or deactivation ends the account's open sessions straight away.
+    const endSessions =
+      (dto.role !== undefined && dto.role !== before.role) ||
+      (dto.isActive === false && before.isActive);
+    const after = await this.prisma.staffUser.update({
+      where: { id },
+      data: { ...dto, ...(endSessions ? { tokenVersion: { increment: 1 } } : {}) },
+      select: publicFields,
+    });
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "staff.permissions_changed",
+      targetType: "staff",
+      targetId: id,
+      metadata: {
+        from: { role: before.role, isActive: before.isActive },
+        to: { role: after.role, isActive: after.isActive },
+      },
+      correlationId: cid,
+    });
+    return after;
+  }
+
+  /**
+   * Gives a staff member a new password (they forgot it, or it leaked). Their open sessions end;
+   * the admin passes the new password on in person.
+   */
+  async setPassword(
+    user: StaffPrincipal,
+    id: string,
+    password: string,
+    reason: string,
+    cid?: string,
+  ) {
+    const found = await this.prisma.staffUser.updateMany({
+      where: { id, institutionId: user.institutionId },
+      data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } },
+    });
+    if (found.count === 0) throw new NotFoundException("Staff account not found.");
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "staff.password_set",
+      targetType: "staff",
+      targetId: id,
+      metadata: { reason },
+      correlationId: cid,
+    });
+  }
+
+  /** Ends every open session of a staff account, e.g. a lost or shared laptop. */
+  async endSessions(user: StaffPrincipal, id: string, reason: string, cid?: string) {
+    const found = await this.prisma.staffUser.updateMany({
+      where: { id, institutionId: user.institutionId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    if (found.count === 0) throw new NotFoundException("Staff account not found.");
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "staff.sessions_ended",
+      targetType: "staff",
+      targetId: id,
+      metadata: { reason },
+      correlationId: cid,
+    });
+  }
+}
+
+export const EndSessionsSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+export const SetPasswordSchema = z.object({
+  password: z.string().min(12).max(256),
+  reason: z.string().trim().min(3).max(500),
+});
+
+@Controller("v1/staff")
+@Roles("ADMIN")
+export class StaffController {
+  constructor(private readonly staff: StaffService) {}
+
+  @Get()
+  list(@CurrentStaff() user: StaffPrincipal) {
+    return this.staff.list(user);
+  }
+
+  @Post()
+  create(
+    @CurrentStaff() user: StaffPrincipal,
+    @Body(new ZodValidationPipe(CreateStaffSchema)) body: z.infer<typeof CreateStaffSchema>,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.staff.create(user, body, cid);
+  }
+
+  @Patch(":id")
+  update(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(UpdateStaffSchema)) body: z.infer<typeof UpdateStaffSchema>,
+    @CorrelationId() cid?: string,
+  ) {
+    return this.staff.update(user, id, body, cid);
+  }
+
+  @Post(":id/password")
+  @HttpCode(204)
+  async setPassword(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(SetPasswordSchema)) body: z.infer<typeof SetPasswordSchema>,
+    @CorrelationId() cid?: string,
+  ): Promise<void> {
+    await this.staff.setPassword(user, id, body.password, body.reason, cid);
+  }
+
+  @Post(":id/end-sessions")
+  @HttpCode(204)
+  async endSessions(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(EndSessionsSchema)) body: z.infer<typeof EndSessionsSchema>,
+    @CorrelationId() cid?: string,
+  ): Promise<void> {
+    await this.staff.endSessions(user, id, body.reason, cid);
+  }
+}
+
+@Module({ controllers: [StaffController], providers: [StaffService] })
+export class StaffModule {}

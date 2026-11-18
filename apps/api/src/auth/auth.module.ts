@@ -6,6 +6,7 @@ import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
 import { AuthService } from "./auth.service";
 import { RolesGuard } from "./roles.guard";
+import { RateLimitGuard } from "../common/rate-limit";
 import type { Env } from "../config/env";
 
 @Module({
@@ -28,6 +29,8 @@ import type { Env } from "../config/env";
     AuthService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // After authentication, so signed-in callers are counted per account, not per lab IP.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
   ],
 })
 export class AuthModule {}

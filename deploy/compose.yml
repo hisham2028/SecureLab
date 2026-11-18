@@ -1,0 +1,133 @@
+# SecureLab production stack for one server: database, API, grading worker, HTTPS front end,
+# daily backups and the retention job. Judge0 runs on a separate machine (deploy/judge0).
+#
+#   cp deploy/.env.example deploy/.env   # then fill it in
+#   docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
+#
+# See deploy/README.md.
+name: securelab-prod
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://securelab:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/securelab?schema=public
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  JUDGE0_URL: ${JUDGE0_URL:?set JUDGE0_URL}
+  JUDGE0_AUTH_TOKEN: ${JUDGE0_AUTH_TOKEN:?set JUDGE0_AUTH_TOKEN}
+  CORS_ORIGINS: https://${SECURELAB_DOMAIN:?set SECURELAB_DOMAIN}
+  TRUST_PROXY: "1"
+  JUDGE_WORKER_CONCURRENCY: ${JUDGE_WORKER_CONCURRENCY:-4}
+  JUDGE_ALERT_WAIT_SECONDS: ${JUDGE_ALERT_WAIT_SECONDS:-120}
+  MONITORING_RETENTION_DAYS: ${MONITORING_RETENTION_DAYS:-90}
+  # AI help (optional). Empty AI_BASE_URL keeps it off. See "AI help" in deploy/README.md.
+  AI_BASE_URL: ${AI_BASE_URL:-}
+  AI_MODEL: ${AI_MODEL:-qwen2.5-coder:7b}
+  AI_API_KEY: ${AI_API_KEY:-}
+  AI_MAX_CONCURRENT: ${AI_MAX_CONCURRENT:-4}
+  AI_QUESTIONS_PER_QUESTION: ${AI_QUESTIONS_PER_QUESTION:-10}
+  AI_RETENTION_DAYS: ${AI_RETENTION_DAYS:-365}
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: securelab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: securelab
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securelab"]
+      interval: 5s
+      retries: 20
+
+  # Applies database migrations, then exits. The API and worker start after it succeeds.
+  migrate:
+    build: { context: .., dockerfile: deploy/Dockerfile.api }
+    image: securelab-api:${SECURELAB_VERSION:-local}
+    environment: *api-env
+    command: ["npx", "prisma", "migrate", "deploy"]
+    healthcheck: { disable: true }
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    image: securelab-api:${SECURELAB_VERSION:-local}
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    image: securelab-api:${SECURELAB_VERSION:-local}
+    restart: unless-stopped
+    environment: *api-env
+    command: ["node", "dist/worker.js"]
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile.web }
+    image: securelab-web:${SECURELAB_VERSION:-local}
+    restart: unless-stopped
+    environment:
+      SECURELAB_DOMAIN: ${SECURELAB_DOMAIN}
+      SECURELAB_TLS: ${SECURELAB_TLS:-internal}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - caddy-data:/data
+      - ./certs:/certs:ro
+    depends_on: [api]
+
+  # One backup a day after 02:00 server time, kept for BACKUP_KEEP_DAYS days, in deploy/backups.
+  # Copy that folder off this machine (docs/ops/backup-restore.md).
+  backup:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://securelab:${POSTGRES_PASSWORD}@postgres:5432/securelab
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - ./backups:/backups
+      - ../infra/ops/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          today=$$(date +%F)
+          if [ "$$(date +%H)" -ge 2 ] && [ ! -f "/backups/.done-$$today" ]; then
+            bash /usr/local/bin/backup.sh /backups && touch "/backups/.done-$$today"
+            find /backups -name 'securelab-*.dump*' -mtime +"$$BACKUP_KEEP_DAYS" -delete
+            find /backups -name '.done-*' -mtime +2 -delete
+          fi
+          sleep 600
+        done
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # Deletes monitoring signals of exams that ended more than MONITORING_RETENTION_DAYS ago.
+  retention:
+    image: securelab-api:${SECURELAB_VERSION:-local}
+    restart: unless-stopped
+    environment: *api-env
+    healthcheck: { disable: true }
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do node dist/retention.js; sleep 86400; done"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # Free, self-hosted AI help. Starts only with --profile ai. Not reachable from outside: the API
+  # talks to it as http://ollama:11434/v1. Pull the model once (deploy/README.md, AI help).
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["ai"]
+    restart: unless-stopped
+    environment:
+      OLLAMA_NUM_PARALLEL: ${AI_MAX_CONCURRENT:-4}
+      OLLAMA_KEEP_ALIVE: 24h
+    volumes: [ollama-data:/root/.ollama]
+
+volumes:
+  pgdata: {}
+  caddy-data: {}
+  ollama-data: {}
