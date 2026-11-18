@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { LocalProvider, defaultToolchain } from "./local.provider";
 import type { ExecutionRequest } from "./execution.types";
 import { validateEnv } from "../config/env";
@@ -92,6 +95,18 @@ describe("LocalProvider (SecureLab Lite)", () => {
     await expect(missing.execute(req("c", "int main(void){return 0;}"))).rejects.toThrow(
       /isn't installed/,
     );
+  });
+
+  it("keeps a full Python path with spaces in one piece", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "py dir "));
+    const exe = path.join(dir, "python.exe");
+    writeFileSync(exe, "");
+    try {
+      expect(defaultToolchain({ LOCAL_PYTHON: exe }).python).toEqual([exe]);
+      expect(defaultToolchain({ LOCAL_PYTHON: "py -3" }).python).toEqual(["py", "-3"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("is refused in production", () => {

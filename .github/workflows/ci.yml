@@ -64,8 +64,10 @@ jobs:
       # The Lite launcher must find the same tools on its own.
       - run: |
           node lite/securelab-lite.mjs check | tee lite-check.txt
-          grep -q "Python 3: OK" lite-check.txt
-          grep -q "C (gcc): OK" lite-check.txt
+          grep -q "Python 3: OK (.*\.exe)" lite-check.txt
+          grep -q "C (gcc): OK (.*\.exe)" lite-check.txt
+          # Run the runner tests below with the full paths the launcher found, as Lite does.
+          sed -n 's/^Python 3: OK (\(.*\))$/LOCAL_PYTHON=\1/p; s/^C (gcc): OK (\(.*\))$/LOCAL_CC=\1/p' lite-check.txt >> "$GITHUB_ENV"
         shell: bash
       - run: pnpm --filter @securelab/shared build
       - run: pnpm --filter @securelab/api exec jest src/execution/local.provider.spec.ts
