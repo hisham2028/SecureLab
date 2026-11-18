@@ -71,6 +71,12 @@ export function App() {
     setStage((s) => (s.kind === "pre" ? stageFor(o) : s));
   }, []);
 
+  // Locked-screen exams: the app stays full screen and on top while the exam screen shows.
+  const locked = stage.kind === "exam" && overview?.exam.lockScreen === true;
+  useEffect(() => {
+    void window.securelab?.setLockdown(locked);
+  }, [locked]);
+
   const signOut = useCallback(() => {
     void api.signOut();
     setOverview(null);

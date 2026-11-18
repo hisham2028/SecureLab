@@ -22,6 +22,8 @@ Print this and keep it in the exam room with the
 | You see or hear                          | Do this                                                                                                           |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | A PC crashes or freezes                  | Move the student to a spare PC. They sign in again; their work comes back. Add a note on their seat.              |
+| **Blocked: Closed the exam app**         | (Locked screens.) Their latest code was submitted. Ask why; to let them back in, open their seat → **Unblock**.   |
+| **Blocked: Signed in again**             | (Locked screens.) The app ended (crash, restart or quit). Check, then **Unblock**; they have 30 min to sign in.   |
 | A student shows **Disconnected**         | Check their network cable. They can keep typing; work is saved on the PC.                                         |
 | **Second PC sign-in** flag               | Check where the student is sitting. Someone else may have their slip.                                             |
 | **Left window** count                    | Look, don't act on it alone. It isn't misconduct by itself.                                                       |

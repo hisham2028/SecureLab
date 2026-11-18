@@ -101,6 +101,8 @@ describeDb("Phase 5: live monitoring, host actions, marks and results (e2e)", ()
           durationMinutes: 60,
           studentIdRule: idRule,
           allowedLanguages: ["c", "python"],
+          // A second sign-in must go through here (locked-screen exams block it; see lock-screen).
+          lockScreen: false,
         })
         .expect(201)
     ).body;

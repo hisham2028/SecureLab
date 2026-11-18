@@ -10,7 +10,6 @@ import {
   type SeatFlag,
   type SeatStatus,
 } from "@securelab/shared";
-import { createHash, randomUUID } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { ExamsService } from "../exams/exams.service";
@@ -18,6 +17,7 @@ import type { StaffPrincipal } from "../auth/auth.types";
 import { MarksService, toQuestionResult } from "../results/marks.service";
 import { MAX_JUDGE_ATTEMPTS } from "../judge/judge.constants";
 import { QueueHealthService } from "../judge/queue-health.service";
+import { submitLatestDrafts, type DraftSubmission } from "../student/latest-drafts";
 import { ConfigService } from "@nestjs/config";
 import type { Env } from "../config/env";
 
@@ -512,7 +512,8 @@ export class LiveService {
     if (!reg.blockedAt) throw new ConflictException("This student isn't blocked.");
     const res = await this.prisma.examRegistration.updateMany({
       where: { id: rid, blockedAt: reg.blockedAt },
-      data: { blockedAt: null, blockedReason: null },
+      // Unblocking is also permission to sign in again to a locked-screen exam.
+      data: { blockedAt: null, blockedReason: null, rejoinApprovedAt: new Date() },
     });
     if (res.count === 0) throw new ConflictException("This seat changed. Reload and try again.");
     await this.record(
@@ -553,7 +554,7 @@ export class LiveService {
     const until = new Date(now.getTime() + minutes * 60_000);
     await this.prisma.examRegistration.update({
       where: { id: rid },
-      data: { reentryUntil: until, finishedAt: null, finishedById: null },
+      data: { reentryUntil: until, finishedAt: null, finishedById: null, rejoinApprovedAt: now },
     });
     await this.record(
       user,
@@ -588,45 +589,11 @@ export class LiveService {
       throw new ConflictException("Only students in a started exam can be finished.");
     const reg = await this.seat(examId, rid);
     const now = new Date();
-    const submitted: { submissionId: string; examQuestionId: string; language: string }[] = [];
+    const submitted: DraftSubmission[] = [];
 
     await this.prisma.$transaction(async (tx) => {
       if (submitDrafts) {
-        const drafts = await tx.studentDraft.findMany({
-          where: { registrationId: rid },
-          orderBy: { savedAt: "desc" },
-        });
-        const latestPerQuestion = new Map<string, (typeof drafts)[number]>();
-        for (const d of drafts)
-          if (!latestPerQuestion.has(d.examQuestionId)) latestPerQuestion.set(d.examQuestionId, d);
-        for (const d of latestPerQuestion.values()) {
-          if (!d.code.trim()) continue;
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${rid}:${d.examQuestionId}`}))`;
-          const last = await tx.submission.findFirst({
-            where: { registrationId: rid, examQuestionId: d.examQuestionId },
-            orderBy: { sequence: "desc" },
-          });
-          const sha = createHash("sha256").update(d.code, "utf8").digest("hex");
-          if (last && last.codeSha256 === sha && last.language === d.language) continue;
-          const s = await tx.submission.create({
-            data: {
-              registrationId: rid,
-              examQuestionId: d.examQuestionId,
-              sequence: (last?.sequence ?? 0) + 1,
-              clientSubmissionId: randomUUID(),
-              language: d.language,
-              code: d.code,
-              codeSha256: sha,
-              submittedById: user.sub,
-              job: { create: {} },
-            },
-          });
-          submitted.push({
-            submissionId: s.id,
-            examQuestionId: d.examQuestionId,
-            language: d.language,
-          });
-        }
+        submitted.push(...(await submitLatestDrafts(tx, rid, { submittedById: user.sub })));
       }
       await tx.examRegistration.update({
         where: { id: rid },

@@ -22,7 +22,10 @@ later, integration with managed-lab kiosk policy. The roadmap suggested Electron
 ## Consequences
 
 - Larger installer and memory use than Tauri; accepted for less integration work.
-- Full screen is not lockdown. Real lockdown is an OS / device-management capability (release 1.2).
+- The app's own lock (kiosk window, always on top, refocus, closing = leaving with server-side
+  auto-submit and block) deters switching but can't stop Ctrl+Alt+Del, Task Manager or a
+  restart; the server covers those by requiring staff permission to sign in again. A complete
+  lock is still an OS / device-management capability.
 - Sandboxed preloads cannot `require` local files, so channel names are duplicated in
   `preload.ts`; a unit test keeps them in sync.
 

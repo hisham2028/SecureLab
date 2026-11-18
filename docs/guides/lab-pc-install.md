@@ -80,9 +80,12 @@ Write down any PC that fails and fix it before the exam, or mark it as out of us
 
 ## Optional: lock down the PC
 
-SecureLab opens full screen, but that isn't lockdown: a student can still switch apps. If the
-institution wants other apps blocked during exams, use Windows kiosk mode, AppLocker or your
-device management tool for the exam user account. Whatever you choose, test it in the
+When an exam has **Lock students' screens** on, SecureLab stays full screen and on top, brings
+itself back when a student switches away, and treats closing it as leaving the exam. An app
+can't block Ctrl+Alt+Del, Task Manager or a restart (SecureLab then asks for the invigilator's
+permission on the next sign-in). If the institution wants other apps blocked completely, also
+use Windows kiosk mode (assigned access), AppLocker or your device management tool for the exam
+user account. Whatever you choose, test it in the
 [rehearsal](rehearsal-plan.md).
 
 ## Updating

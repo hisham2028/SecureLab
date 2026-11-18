@@ -16,6 +16,7 @@ const ExamConfigFields = {
   maxSubmissionsPerQuestion: z.number().int().min(1).max(100),
   showSubmissionVerdicts: z.boolean(),
   aiMode: z.enum(["DISABLED", "HINTS_ONLY", "FULL"]),
+  lockScreen: z.boolean(),
 };
 
 export const CreateExamSchema = z.object({
@@ -31,6 +32,7 @@ export const CreateExamSchema = z.object({
   maxSubmissionsPerQuestion: ExamConfigFields.maxSubmissionsPerQuestion.default(10),
   showSubmissionVerdicts: ExamConfigFields.showSubmissionVerdicts.default(false),
   aiMode: ExamConfigFields.aiMode.default("DISABLED"),
+  lockScreen: ExamConfigFields.lockScreen.default(true),
 });
 export type CreateExamDto = z.infer<typeof CreateExamSchema>;
 

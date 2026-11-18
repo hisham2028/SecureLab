@@ -50,6 +50,8 @@ export interface StudentOverview {
     navigationPolicy: NavigationPolicy;
     allowEarlySubmit: boolean;
     maxSubmissionsPerQuestion: number;
+    /** The app stays full screen and on top; closing it submits and blocks the seat. */
+    lockScreen: boolean;
   };
   seat: {
     registrationId: string;

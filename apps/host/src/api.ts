@@ -117,6 +117,7 @@ export interface ExamSettings {
   maxSubmissionsPerQuestion: number;
   showSubmissionVerdicts: boolean;
   aiMode: AiMode;
+  lockScreen: boolean;
 }
 
 export interface ExamQuestionRef {

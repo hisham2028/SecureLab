@@ -55,5 +55,6 @@ interface Window {
       secureConnection: boolean;
       screen: { width: number; height: number };
     }>;
+    setLockdown(on: boolean): Promise<void>;
   };
 }

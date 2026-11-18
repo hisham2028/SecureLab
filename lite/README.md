@@ -60,6 +60,12 @@ in `lite/demo-students.txt`.
    sees "Accepted" or how many tests passed within seconds.
 4. In the dashboard, watch the **Live** tab, open the student's seat, and look at **Results**.
 
+The demo exam locks the student's screen, so on one PC the student app covers everything,
+including the dashboard, until the student finishes. To get out early, press Alt+F4 and choose
+**Leave the exam**: that submits the student's code and blocks them, which you can then undo in
+the dashboard with **Unblock**. For your own exams you can turn the lock off under **Edit
+settings → Lock students' screens**.
+
 To be a second student at the same time, run this in another PowerShell window:
 
 ```powershell

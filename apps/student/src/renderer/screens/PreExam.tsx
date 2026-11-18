@@ -182,10 +182,19 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
               The timer comes from the exam server. Changing this computer&apos;s clock doesn&apos;t
               change it.
             </li>
-            <li>
-              If SecureLab closes or the computer restarts, open it and sign in again. Your work is
-              restored.
-            </li>
+            {exam.lockScreen ? (
+              <li>
+                <strong>This exam locks your screen.</strong> SecureLab stays full screen and you
+                can&apos;t switch to other apps. If you close it, your latest saved code is
+                submitted and you can only come back when the invigilator lets you in. If the
+                computer crashes, raise your hand.
+              </li>
+            ) : (
+              <li>
+                If SecureLab closes or the computer restarts, open it and sign in again. Your work
+                is restored.
+              </li>
+            )}
             <li>If anything goes wrong, raise your hand and tell the invigilator.</li>
           </ul>
           <h3>What the exam staff can see</h3>

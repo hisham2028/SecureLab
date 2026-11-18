@@ -8,6 +8,8 @@ export const IpcChannel = {
   DraftMarkSynced: "draft:mark-synced",
   EnvironmentInfo: "env:info",
   SystemCheck: "system:check",
+  /** Locked-screen exams: the renderer says when the exam screen is showing. */
+  Lockdown: "exam:lockdown",
 } as const;
 
 export interface EnvironmentInfo {

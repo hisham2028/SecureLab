@@ -357,6 +357,7 @@ function DetailsTab({ exam }: { exam: Exam }) {
       { DISABLED: "Off", HINTS_ONLY: "Hints only", FULL: "Full assistance" }[exam.aiMode],
     ],
     ["Finish early", exam.allowEarlySubmit ? "Allowed" : "Not allowed"],
+    ["Students’ screens", exam.lockScreen ? "Locked during the exam" : "Not locked"],
     [
       "Student ID format",
       `${r.minLength === r.maxLength ? r.minLength : `${r.minLength}–${r.maxLength}`} characters${r.prefix ? `, starting "${r.prefix}"` : ""}; ${chars}${r.caseSensitive ? "; case-sensitive" : ""}`,
