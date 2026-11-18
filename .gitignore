@@ -13,3 +13,8 @@ package-lock.json
 yarn.lock
 bun.lockb
 bun.lock
+
+# Production deployment: local secrets, certificates and backups
+deploy/judge0/judge0.env
+deploy/backups/
+deploy/certs/

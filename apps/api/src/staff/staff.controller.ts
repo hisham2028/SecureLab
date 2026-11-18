@@ -125,6 +125,34 @@ export class StaffService {
     return after;
   }
 
+  /**
+   * Gives a staff member a new password (they forgot it, or it leaked). Their open sessions end;
+   * the admin passes the new password on in person.
+   */
+  async setPassword(
+    user: StaffPrincipal,
+    id: string,
+    password: string,
+    reason: string,
+    cid?: string,
+  ) {
+    const found = await this.prisma.staffUser.updateMany({
+      where: { id, institutionId: user.institutionId },
+      data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } },
+    });
+    if (found.count === 0) throw new NotFoundException("Staff account not found.");
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "staff.password_set",
+      targetType: "staff",
+      targetId: id,
+      metadata: { reason },
+      correlationId: cid,
+    });
+  }
+
   /** Ends every open session of a staff account, e.g. a lost or shared laptop. */
   async endSessions(user: StaffPrincipal, id: string, reason: string, cid?: string) {
     const found = await this.prisma.staffUser.updateMany({
@@ -146,6 +174,10 @@ export class StaffService {
 }
 
 export const EndSessionsSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+export const SetPasswordSchema = z.object({
+  password: z.string().min(12).max(256),
+  reason: z.string().trim().min(3).max(500),
+});
 
 @Controller("v1/staff")
 @Roles("ADMIN")
@@ -174,6 +206,17 @@ export class StaffController {
     @CorrelationId() cid?: string,
   ) {
     return this.staff.update(user, id, body, cid);
+  }
+
+  @Post(":id/password")
+  @HttpCode(204)
+  async setPassword(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(SetPasswordSchema)) body: z.infer<typeof SetPasswordSchema>,
+    @CorrelationId() cid?: string,
+  ): Promise<void> {
+    await this.staff.setPassword(user, id, body.password, body.reason, cid);
   }
 
   @Post(":id/end-sessions")

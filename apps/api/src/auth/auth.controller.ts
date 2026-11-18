@@ -11,6 +11,10 @@ const LoginSchema = z.object({
   password: z.string().min(1).max(256),
 });
 type LoginDto = z.infer<typeof LoginSchema>;
+const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(256),
+  newPassword: z.string().min(12, "Use at least 12 characters.").max(256),
+});
 
 @Controller("v1/auth")
 export class AuthController {
@@ -25,6 +29,21 @@ export class AuthController {
   @HttpCode(200)
   login(@Body(new ZodValidationPipe(LoginSchema)) body: LoginDto, @Req() req: AuthedRequest) {
     return this.auth.login(body.email, body.password, req.correlationId);
+  }
+
+  @RateLimit({ name: "staff-password", limit: 10, windowSeconds: 300, key: by.principal })
+  @Post("password")
+  @HttpCode(200)
+  changePassword(
+    @Body(new ZodValidationPipe(ChangePasswordSchema)) body: z.infer<typeof ChangePasswordSchema>,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.auth.changePassword(
+      req.user as StaffPrincipal,
+      body.currentPassword,
+      body.newPassword,
+      req.correlationId,
+    );
   }
 
   /** Signs this account out on every device; the current token stops working too. */

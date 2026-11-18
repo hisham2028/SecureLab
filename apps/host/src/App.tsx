@@ -7,10 +7,15 @@ import { ExamDetail } from "./pages/ExamDetail";
 import { PinSheet } from "./pages/PinSheet";
 import { QuestionsList } from "./pages/QuestionsList";
 import { QuestionEditor } from "./pages/QuestionEditor";
+import { StaffPage } from "./pages/StaffPage";
+import { ChangePasswordDialog } from "./ui/ChangePasswordDialog";
+import { Notice } from "./ui/bits";
 
 export function App() {
   const [user, setUser] = useState<api.Me | null>(null);
   const [expired, setExpired] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
   const route = useRoute();
 
   useEffect(() => {
@@ -37,7 +42,12 @@ export function App() {
   }
 
   const canManage = user.role === "ADMIN" || user.role === "HOST";
-  const section = route.page.startsWith("question") ? "questions" : "exams";
+  const isAdmin = user.role === "ADMIN";
+  const section = route.page.startsWith("question")
+    ? "questions"
+    : route.page === "staff"
+      ? "staff"
+      : "exams";
 
   return (
     <div className="shell">
@@ -54,10 +64,24 @@ export function App() {
               Question bank
             </a>
           )}
+          {isAdmin && (
+            <a href="#/staff" aria-current={section === "staff" ? "page" : undefined}>
+              Staff
+            </a>
+          )}
         </nav>
         <span className="who">
           {user.displayName} · {user.role.toLowerCase()}
         </span>
+        <button
+          className="btn btn-sm"
+          onClick={() => {
+            setPasswordChanged(false);
+            setChangingPassword(true);
+          }}
+        >
+          Change password
+        </button>
         <button
           className="btn btn-sm"
           onClick={() => {
@@ -68,7 +92,23 @@ export function App() {
           Sign out
         </button>
       </header>
+      <ChangePasswordDialog
+        open={changingPassword}
+        onClose={() => setChangingPassword(false)}
+        onChanged={() => {
+          setChangingPassword(false);
+          setPasswordChanged(true);
+        }}
+      />
       <main>
+        {passwordChanged && (
+          <div className="page no-print">
+            <Notice tone="success">
+              Password changed. You&apos;re still signed in here and signed out everywhere else.
+            </Notice>
+          </div>
+        )}
+        {route.page === "staff" && isAdmin && <StaffPage me={user} />}
         {route.page === "exams" && <ExamsList canCreate={canManage} />}
         {route.page === "exam" && (
           <ExamDetail key={route.id} id={route.id} tab={route.tab} me={user} />
@@ -80,6 +120,7 @@ export function App() {
           <QuestionEditor key={route.id} id={route.id} />
         )}
         {(route.page === "not-found" ||
+          (!isAdmin && route.page === "staff") ||
           (!canManage &&
             ["pins", "questions", "question-new", "question-edit"].includes(route.page))) && (
           <div className="page">

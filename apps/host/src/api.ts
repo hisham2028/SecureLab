@@ -229,6 +229,38 @@ export const me = () => call<Me>("/v1/auth/me");
 export function logout(): void {
   accessToken = null;
 }
+/** Changes your own password; other sessions end and this one continues with a new token. */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const { accessToken: token } = await call<{ accessToken: string }>(
+    "/v1/auth/password",
+    json("POST", { currentPassword, newPassword }),
+  );
+  accessToken = token;
+}
+export const signOutEverywhere = () =>
+  call<void>("/v1/auth/sign-out-everywhere", { method: "POST" });
+
+export interface StaffMember {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  isActive: boolean;
+  lastLoginAt: string | null;
+}
+export const listStaff = () => call<StaffMember[]>("/v1/staff");
+export const createStaff = (body: {
+  email: string;
+  displayName: string;
+  role: Role;
+  password: string;
+}) => call<StaffMember>("/v1/staff", json("POST", body));
+export const updateStaff = (id: string, body: { role?: Role; isActive?: boolean }) =>
+  call<StaffMember>(`/v1/staff/${id}`, json("PATCH", body));
+export const setStaffPassword = (id: string, password: string, reason: string) =>
+  call<void>(`/v1/staff/${id}/password`, json("POST", { password, reason }));
+export const endStaffSessions = (id: string, reason: string) =>
+  call<void>(`/v1/staff/${id}/end-sessions`, json("POST", { reason }));
 
 export const listExams = () => call<ExamSummary[]>("/v1/exams");
 export const getExam = (id: string) => call<Exam>(`/v1/exams/${id}`);

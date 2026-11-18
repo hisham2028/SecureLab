@@ -11,6 +11,7 @@ export type Route =
   | { page: "questions" }
   | { page: "question-new" }
   | { page: "question-edit"; id: string }
+  | { page: "staff" }
   | { page: "not-found" };
 
 export function parseRoute(hash: string): Route {
@@ -22,6 +23,7 @@ export function parseRoute(hash: string): Route {
     const tab = EXAM_TABS.includes(c as ExamTab) ? (c as ExamTab) : "questions";
     return { page: "exam", id: b, tab };
   }
+  if (a === "staff" && !b) return { page: "staff" };
   if (a === "questions" && !b) return { page: "questions" };
   if (a === "questions" && b === "new") return { page: "question-new" };
   if (a === "questions" && b) return { page: "question-edit", id: b };

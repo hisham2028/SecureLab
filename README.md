@@ -43,26 +43,26 @@ node infra/judge-spike/run-spike.mjs http://localhost:2358
 
 Staff routes (bearer token from `POST /v1/auth/login`):
 
-| Route                                                                                | Who                                     | What                                                                   |
-| ------------------------------------------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------- |
-| `GET/POST /v1/questions`, `GET /v1/questions/:id`, `POST /v1/questions/:id/versions` | admin, host                             | Question bank. Every edit creates a new immutable version.             |
-| `GET/POST /v1/exams`, `GET/PATCH/DELETE /v1/exams/:id`                               | admin, host (invigilator: read)         | Exams and their settings.                                              |
-| `PUT /v1/exams/:id/questions`                                                        | admin, host                             | Pin exact question versions to an exam (draft or scheduled only).      |
-| `GET /v1/exams/:id/preview`                                                          | admin, host                             | The exam exactly as students see it.                                   |
-| `POST /v1/exams/:id/transitions`                                                     | admin, host (invigilator: pause/resume) | Publish, start, pause, resume, complete, archive.                      |
-| `GET/POST /v1/exams/:id/registrations`, `POST .../import`                            | admin, host                             | Register students; CSV import is all-or-nothing with row-level errors. |
-| `POST .../registrations/:rid/reset-pin`, `PUT .../:rid/extension`                    | invigilator+, host+                     | Unlock a seat with a new PIN; give extra time.                         |
-| `GET/POST/PATCH /v1/staff`, `POST /v1/staff/:id/end-sessions`                        | admin                                   | Staff accounts and roles; end someone's sessions (reason required).    |
-| `POST /v1/auth/sign-out-everywhere`                                                  | any staff                               | End all of your own sessions.                                          |
-| `GET /v1/ops/grading`                                                                | admin, host                             | Grading queue health and the submissions the judge gave up on.         |
-| `GET /v1/exams/:id/monitor`, `GET .../registrations/:rid/detail`                     | all staff                               | Live exam room (filters, search, paging) and one seat's timeline.      |
-| `GET/POST .../announcements`, `GET/POST .../notes`                                   | all staff                               | Announce to every student; write incident notes (append-only).         |
-| `POST .../registrations/:rid/block`, `.../unblock`, `.../reentry`                    | all staff                               | Block or unblock a seat, or let a finished student back in. Reasoned.  |
-| `POST .../registrations/:rid/force-finish`, `POST .../submissions/:sid/regrade`      | admin, host                             | Submit a student's drafts and finish; grade a failed submission again. |
-| `GET .../submissions/:sid`                                                           | admin, host                             | Submission review: code, attempts, per-test results.                   |
-| `POST .../registrations/:rid/questions/:qid/marks`                                   | admin, host                             | Override or rubric-mark a question. Reason required, history kept.     |
-| `GET .../results`, `POST .../results/finalize`, `.../publish`, `.../hide`            | admin, host                             | Provisional marks and analytics; save, publish or hide a version.      |
-| `GET .../results/:releaseId/export.csv`                                              | admin, host                             | CSV of a saved version.                                                |
+| Route                                                                                | Who                                     | What                                                                                                                        |
+| ------------------------------------------------------------------------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GET/POST /v1/questions`, `GET /v1/questions/:id`, `POST /v1/questions/:id/versions` | admin, host                             | Question bank. Every edit creates a new immutable version.                                                                  |
+| `GET/POST /v1/exams`, `GET/PATCH/DELETE /v1/exams/:id`                               | admin, host (invigilator: read)         | Exams and their settings.                                                                                                   |
+| `PUT /v1/exams/:id/questions`                                                        | admin, host                             | Pin exact question versions to an exam (draft or scheduled only).                                                           |
+| `GET /v1/exams/:id/preview`                                                          | admin, host                             | The exam exactly as students see it.                                                                                        |
+| `POST /v1/exams/:id/transitions`                                                     | admin, host (invigilator: pause/resume) | Publish, start, pause, resume, complete, archive.                                                                           |
+| `GET/POST /v1/exams/:id/registrations`, `POST .../import`                            | admin, host                             | Register students; CSV import is all-or-nothing with row-level errors.                                                      |
+| `POST .../registrations/:rid/reset-pin`, `PUT .../:rid/extension`                    | invigilator+, host+                     | Unlock a seat with a new PIN; give extra time.                                                                              |
+| `GET/POST/PATCH /v1/staff`, `POST /v1/staff/:id/end-sessions`, `.../password`        | admin                                   | Staff accounts and roles; end someone's sessions or set a temporary password (reason required). The dashboard's Staff page. |
+| `POST /v1/auth/sign-out-everywhere`, `POST /v1/auth/password`                        | any staff                               | End all of your own sessions; change your own password (ends your other sessions).                                          |
+| `GET /v1/ops/grading`                                                                | admin, host                             | Grading queue health and the submissions the judge gave up on.                                                              |
+| `GET /v1/exams/:id/monitor`, `GET .../registrations/:rid/detail`                     | all staff                               | Live exam room (filters, search, paging) and one seat's timeline.                                                           |
+| `GET/POST .../announcements`, `GET/POST .../notes`                                   | all staff                               | Announce to every student; write incident notes (append-only).                                                              |
+| `POST .../registrations/:rid/block`, `.../unblock`, `.../reentry`                    | all staff                               | Block or unblock a seat, or let a finished student back in. Reasoned.                                                       |
+| `POST .../registrations/:rid/force-finish`, `POST .../submissions/:sid/regrade`      | admin, host                             | Submit a student's drafts and finish; grade a failed submission again.                                                      |
+| `GET .../submissions/:sid`                                                           | admin, host                             | Submission review: code, attempts, per-test results.                                                                        |
+| `POST .../registrations/:rid/questions/:qid/marks`                                   | admin, host                             | Override or rubric-mark a question. Reason required, history kept.                                                          |
+| `GET .../results`, `POST .../results/finalize`, `.../publish`, `.../hide`            | admin, host                             | Provisional marks and analytics; save, publish or hide a version.                                                           |
+| `GET .../results/:releaseId/export.csv`                                              | admin, host                             | CSV of a saved version.                                                                                                     |
 
 Student routes (token from `POST /v1/student/session` with access code, student ID and PIN). All are
 scoped to the caller's own seat; hidden test cases never reach them.
@@ -117,7 +117,9 @@ ignore those, so nobody can point a shared lab account at another server.
 
 ### Running it for real
 
-Before a pilot, work through the [pilot readiness checklist](docs/ops/pilot-readiness.md). It
+To install it on servers, follow the [deployment guide](deploy/README.md): one Docker Compose
+file for the SecureLab server (database, API, grading worker, HTTPS, daily backups, retention)
+and one for Judge0 on its own machine. Before a pilot, work through the [pilot readiness checklist](docs/ops/pilot-readiness.md). It
 links the [security review](docs/security/security-review.md),
 [data and retention policy](docs/privacy/data-retention.md),
 [reliability and load report](docs/ops/reliability-report.md),
