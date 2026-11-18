@@ -81,9 +81,23 @@ export interface MonitorRow {
   reentryUntil: string | null;
 }
 
+/** The grading queue as operators see it. Failed jobs wait for a host (regrade or manual mark). */
+export interface GradingHealth {
+  /** Submissions queued or being graded. */
+  waiting: number;
+  /** How long the oldest of those has waited since it was submitted. */
+  oldestWaitingSeconds: number | null;
+  /** Jobs whose worker stopped renewing its lease (crashed or hung); another worker takes over. */
+  stalled: number;
+  failed: number;
+  /** Waiting too long or stalled: show an alert. */
+  behind: boolean;
+}
+
 export interface MonitorResponse {
   serverTime: string;
   examStatus: ExamStatus;
+  grading: GradingHealth;
   counts: Record<SeatStatus, number> & { ALL: number };
   rows: MonitorRow[];
   total: number;

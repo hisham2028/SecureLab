@@ -3,7 +3,7 @@ import path from "node:path";
 import { DraftStore } from "./drafts";
 import { IpcChannel, type EnvironmentInfo, type SystemCheck } from "./ipc-contract";
 import { ApiClient, isAllowedRequest } from "./api-client";
-import { resolveApiUrl } from "./config";
+import { configSources, resolveApiUrl } from "./config";
 
 /**
  * Electron main process. Full-screen here is a convenience, not lockdown: real exam lockdown
@@ -25,9 +25,13 @@ const drafts = new DraftStore(path.join(app.getPath("userData"), "drafts"), {
     safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(data) : data.toString("utf8"),
 });
 
-const api = new ApiClient(
-  resolveApiUrl(process.env, [path.dirname(app.getPath("exe")), app.getPath("userData")]),
+const sources = configSources(
+  app.isPackaged,
+  process.env,
+  path.dirname(app.getPath("exe")),
+  app.getPath("userData"),
 );
+const api = new ApiClient(resolveApiUrl(sources.env, sources.dirs));
 
 const MAX_CODE = 256 * 1024;
 const isId = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(v);

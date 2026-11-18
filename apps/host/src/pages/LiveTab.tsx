@@ -104,6 +104,17 @@ export function LiveTab({ exam, role }: { exam: Exam; role: Role }) {
         ))}
       </div>
 
+      {data?.grading.behind && (
+        <Notice tone="warning">
+          {data.grading.stalled > 0
+            ? "A grading worker stopped responding. Another worker takes its submissions over within about 2 minutes."
+            : `Grading is running behind: the oldest submission has waited ${formatWait(
+                data.grading.oldestWaitingSeconds ?? 0,
+              )}.`}{" "}
+          Submissions are stored safely and will be graded. If this lasts, check that the grading
+          workers and the judge are running.
+        </Notice>
+      )}
       {notice && <Notice tone="success">{notice}</Notice>}
       <ErrorBanner error={error} />
       <p className="field-hint">
@@ -189,6 +200,11 @@ export function LiveTab({ exam, role }: { exam: Exam; role: Role }) {
       />
     </div>
   );
+}
+
+function formatWait(seconds: number): string {
+  if (seconds < 90) return `${seconds} seconds`;
+  return `${Math.round(seconds / 60)} minutes`;
 }
 
 function Row({ row: r, onOpen }: { row: MonitorRow; onOpen: () => void }) {

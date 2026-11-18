@@ -3,6 +3,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  HttpCode,
   Injectable,
   Module,
   NotFoundException,
@@ -99,9 +100,13 @@ export class StaffService {
       where: { id, institutionId: user.institutionId },
     });
     if (!before) throw new NotFoundException("Staff account not found.");
+    // A role change or deactivation ends the account's open sessions straight away.
+    const endSessions =
+      (dto.role !== undefined && dto.role !== before.role) ||
+      (dto.isActive === false && before.isActive);
     const after = await this.prisma.staffUser.update({
       where: { id },
-      data: dto,
+      data: { ...dto, ...(endSessions ? { tokenVersion: { increment: 1 } } : {}) },
       select: publicFields,
     });
     await this.audit.record({
@@ -119,7 +124,28 @@ export class StaffService {
     });
     return after;
   }
+
+  /** Ends every open session of a staff account, e.g. a lost or shared laptop. */
+  async endSessions(user: StaffPrincipal, id: string, reason: string, cid?: string) {
+    const found = await this.prisma.staffUser.updateMany({
+      where: { id, institutionId: user.institutionId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    if (found.count === 0) throw new NotFoundException("Staff account not found.");
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "staff.sessions_ended",
+      targetType: "staff",
+      targetId: id,
+      metadata: { reason },
+      correlationId: cid,
+    });
+  }
 }
+
+export const EndSessionsSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 
 @Controller("v1/staff")
 @Roles("ADMIN")
@@ -148,6 +174,17 @@ export class StaffController {
     @CorrelationId() cid?: string,
   ) {
     return this.staff.update(user, id, body, cid);
+  }
+
+  @Post(":id/end-sessions")
+  @HttpCode(204)
+  async endSessions(
+    @CurrentStaff() user: StaffPrincipal,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(EndSessionsSchema)) body: z.infer<typeof EndSessionsSchema>,
+    @CorrelationId() cid?: string,
+  ): Promise<void> {
+    await this.staff.endSessions(user, id, body.reason, cid);
   }
 }
 

@@ -28,3 +28,18 @@ export function resolveApiUrl(env: NodeJS.ProcessEnv, configDirs: string[]): URL
   }
   return new URL(DEFAULT_API_URL);
 }
+
+/**
+ * Installed builds only trust the config.json next to SecureLab.exe, which the per-machine
+ * installer puts under Program Files where students can't write. The environment variable and
+ * the per-user file would let anyone with the student account point the app at another server
+ * (for example one that collects PINs), so they only work in development.
+ */
+export function configSources(
+  packaged: boolean,
+  env: NodeJS.ProcessEnv,
+  exeDir: string,
+  userDataDir: string,
+): { env: NodeJS.ProcessEnv; dirs: string[] } {
+  return packaged ? { env: {}, dirs: [exeDir] } : { env, dirs: [exeDir, userDataDir] };
+}

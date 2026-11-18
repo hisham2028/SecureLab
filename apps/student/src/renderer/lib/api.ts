@@ -45,7 +45,9 @@ async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unkn
   const sentAt = performance.now();
   const res = await bridge.request(method, path, body);
   const receivedAt = performance.now();
-  setConnection(res.status === 0 ? "offline" : "online");
+  // No response, or a proxy/server saying it can't serve right now: work stays local and syncs later.
+  const unreachable = res.status === 0 || (res.status >= 502 && res.status <= 504);
+  setConnection(unreachable ? "offline" : "online");
   if (!res.ok) {
     if (res.status === 401 && path !== "/v1/student/session") sessionEnded.set(res.error.message);
     if (res.error.code === "SEAT_BLOCKED" && path !== "/v1/student/session")

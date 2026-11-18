@@ -4,6 +4,8 @@ export interface StaffPrincipal {
   sub: string;
   institutionId: string;
   role: StaffRole;
+  /** The account's token version when this token was issued; a bump ends the session. */
+  tv?: number;
   kind: "staff";
 }
 

@@ -17,6 +17,9 @@ import { ExamsService } from "../exams/exams.service";
 import type { StaffPrincipal } from "../auth/auth.types";
 import { MarksService, toQuestionResult } from "../results/marks.service";
 import { MAX_JUDGE_ATTEMPTS } from "../judge/judge.constants";
+import { QueueHealthService } from "../judge/queue-health.service";
+import { ConfigService } from "@nestjs/config";
+import type { Env } from "../config/env";
 
 const LIVE = ["RUNNING", "PAUSED"];
 const STATUSES: SeatStatus[] = ["NOT_STARTED", "ACTIVE", "DISCONNECTED", "FINISHED", "BLOCKED"];
@@ -34,6 +37,8 @@ export class LiveService {
     private readonly audit: AuditService,
     private readonly exams: ExamsService,
     private readonly marks: MarksService,
+    private readonly queue: QueueHealthService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   private record(
@@ -111,6 +116,10 @@ export class LiveService {
     return {
       serverTime: now.toISOString(),
       examStatus: exam.status,
+      grading: await this.queue.health(
+        { examId },
+        this.config.get("JUDGE_ALERT_WAIT_SECONDS", { infer: true }),
+      ),
       counts: { ...counts, ALL: regs.length },
       rows: await this.rows(exam, page, now),
       total: filtered.length,

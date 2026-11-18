@@ -14,6 +14,7 @@ import { Public } from "../auth/public.decorator";
 import { StudentRoute } from "../auth/student-route.decorator";
 import { CorrelationId, CurrentStudent } from "../auth/current-user.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { by, RateLimit } from "../common/rate-limit";
 import type { StudentPrincipal } from "../auth/auth.types";
 import { StudentService } from "./student.service";
 import { StudentWorkService } from "./student-work.service";
@@ -38,6 +39,16 @@ export class StudentController {
   ) {}
 
   @Public()
+  @RateLimit(
+    {
+      name: "student-login-seat",
+      limit: 10,
+      windowSeconds: 60,
+      key: by.body("accessCode", "studentId"),
+    },
+    // A whole lab often shares one public IP, so this only stops a flood from one place.
+    { name: "student-login-ip", limit: 600, windowSeconds: 60, key: by.ip },
+  )
   @Post("session")
   @HttpCode(200)
   login(
@@ -49,6 +60,16 @@ export class StudentController {
 
   /** A student's own published result. Uses the same credentials as sign-in; no session. */
   @Public()
+  @RateLimit(
+    {
+      name: "student-result-seat",
+      limit: 10,
+      windowSeconds: 60,
+      key: by.body("accessCode", "studentId"),
+    },
+    // A whole lab often shares one public IP, so this only stops a flood from one place.
+    { name: "student-result-ip", limit: 600, windowSeconds: 60, key: by.ip },
+  )
   @Post("result")
   @HttpCode(200)
   result(
@@ -128,6 +149,7 @@ export class StudentController {
   }
 
   @StudentRoute()
+  @RateLimit({ name: "student-submit", limit: 30, windowSeconds: 60, key: by.principal })
   @Post("exam/questions/:examQuestionId/submissions")
   submit(
     @CurrentStudent() p: StudentPrincipal,
