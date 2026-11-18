@@ -128,6 +128,9 @@ The API is served under `/api` on the same address as the dashboard. Lab IT puts
 { "apiUrl": "https://exam.cse.example.edu/api" }
 ```
 
+The full steps for lab IT, including the certificate and the per-PC check, are in the
+[lab PC installation guide](../docs/guides/lab-pc-install.md).
+
 ## 5. Backups
 
 The `backup` service takes one backup a day after 02:00 server time into `deploy/backups/`,

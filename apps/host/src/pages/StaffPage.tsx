@@ -13,7 +13,8 @@ const ROLE_LABEL: Record<Role, string> = {
 const ROLE_HINT: Record<Role, string> = {
   ADMIN: "Everything, including staff accounts.",
   HOST: "Questions, exams, students, marks and results.",
-  INVIGILATOR: "The live exam room: announcements, extra time, block and unblock, notes.",
+  INVIGILATOR:
+    "The live exam room: pause and resume, announcements, block and unblock, letting a student back in, resetting a PIN, notes.",
 };
 
 /** A readable temporary password: no 0/O or 1/l/I, so it can be read out or copied by hand. */

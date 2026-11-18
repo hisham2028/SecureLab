@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, safeStorage, screen, session } from "electron";
 import path from "node:path";
 import { DraftStore } from "./drafts";
 import { IpcChannel, type EnvironmentInfo, type SystemCheck } from "./ipc-contract";
@@ -31,7 +31,12 @@ const sources = configSources(
   path.dirname(app.getPath("exe")),
   app.getPath("userData"),
 );
-const api = new ApiClient(resolveApiUrl(sources.env, sources.dirs));
+// Electron's net.fetch goes through Chromium's network stack, so it trusts the certificates
+// Windows trusts (an institution CA, or the Caddy root that lab IT installs) and uses the
+// system proxy. Node's own fetch would only trust its bundled public CAs.
+const electronFetch: typeof fetch = (input, init) =>
+  net.fetch(input instanceof URL ? input.href : input, init);
+const api = new ApiClient(resolveApiUrl(sources.env, sources.dirs), electronFetch);
 
 const MAX_CODE = 256 * 1024;
 const isId = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(v);

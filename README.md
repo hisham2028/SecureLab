@@ -117,6 +117,13 @@ ignore those, so nobody can point a shared lab account at another server.
 
 ### Running it for real
 
+Guides for the people involved are in [docs/guides](docs/guides):
+[teacher guide](docs/guides/teacher-guide.md),
+[invigilator sheet](docs/guides/invigilator-sheet.md),
+[student quick start](docs/guides/student-quick-start.md),
+[lab PC installation](docs/guides/lab-pc-install.md) and the
+[rehearsal plan](docs/guides/rehearsal-plan.md).
+
 To install it on servers, follow the [deployment guide](deploy/README.md): one Docker Compose
 file for the SecureLab server (database, API, grading worker, HTTPS, daily backups, retention)
 and one for Judge0 on its own machine. Before a pilot, work through the [pilot readiness checklist](docs/ops/pilot-readiness.md). It

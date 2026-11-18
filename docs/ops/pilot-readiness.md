@@ -49,7 +49,7 @@ done on the pilot server.
 - [ ] **(you)** Supported-device check: Windows 10/11, the installer runs, Monaco loads, the app
       reaches the server through the lab firewall
 - [ ] SecureLab installed per-machine by lab IT, with `config.json` next to `SecureLab.exe`
-      (the installed app ignores per-user settings)
+      (the installed app ignores per-user settings). Steps: [lab PC installation](../guides/lab-pc-install.md)
 - [ ] **(you)** Installer code-signed (security review S11), or its SHA-256 checked by lab IT
       against the published value
 - [ ] PC clocks roughly right (not required for timing, but helps when reading logs)
@@ -59,14 +59,18 @@ done on the pilot server.
 ## People
 
 - [ ] **(you)** Pilot course, lab sessions and support contacts confirmed
-- [ ] **(you)** Teachers and invigilators trained: - create an exam - import students and print PIN slips - start, pause and announce - read the Live tab - extra time, block and unblock, end a student's exam - mark by hand - finalize, publish and hide
-- [ ] **(you)** Students told what is monitored (the app also shows this before the exam)
+- [ ] **(you)** Teachers and invigilators trained with the [teacher guide](../guides/teacher-guide.md)
+      and the [invigilator sheet](../guides/invigilator-sheet.md): - create an exam - import students and print PIN slips - start, pause and announce - read the Live tab - extra time, block and unblock, end a student's exam - mark by hand - finalize, publish and hide
+- [ ] **(you)** Students given the [quick start](../guides/student-quick-start.md), which says what is
+      monitored (the app also shows this before the exam)
 - [ ] **(you)** An incident contact on call during the exam, with the
       [incident runbook](incident-response.md) printed in the room
 - [ ] **(you)** Manual fallback ready: paper or local-editor exam and a USB collection plan if
       the server is down for longer than the exam can be paused
 
 ## Rehearsal (before any graded exam)
+
+Run it with the [rehearsal plan](../guides/rehearsal-plan.md).
 
 - [ ] Full mock exam with the expected number of PCs, including: - a pulled network cable on one PC - a restarted PC - the API restarted once
 - [ ] Afterwards, reconcile: - registered students against students who started and submitted - submissions against graded and failed submissions - marks against the CSV and the published result
