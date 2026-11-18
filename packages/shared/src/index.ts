@@ -5,3 +5,5 @@ export * from "./execution";
 export * from "./exam-timing";
 export * from "./student-api";
 export * from "./grading";
+export * from "./monitor";
+export * from "./marks";

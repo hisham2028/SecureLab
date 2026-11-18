@@ -145,15 +145,25 @@ describeDb("Phase 4: judge and grading (e2e)", () => {
       .expect(201)
       .then((r) => r.body as { id: string; status: string });
 
+  /** The exam a submission belongs to, so the worker only claims this suite's jobs. */
+  const examOf = async (submissionId: string) =>
+    (
+      await prisma.submission.findUniqueOrThrow({
+        where: { id: submissionId },
+        select: { examQuestion: { select: { examId: true } } },
+      })
+    ).examQuestion.examId;
+
   /** Runs the worker until this submission's job reaches a resting state. */
   async function drain(submissionId: string, w = worker) {
+    const examId = await examOf(submissionId);
     for (let i = 0; i < 100; i++) {
       const job = await prisma.judgeJob.findUniqueOrThrow({ where: { submissionId } });
       if (job.status === "DONE" || job.status === "FAILED") return job;
       if (job.status === "QUEUED" && job.runAfter > new Date()) {
         await prisma.judgeJob.update({ where: { id: job.id }, data: { runAfter: new Date(0) } });
       }
-      await w.runOnce();
+      await w.runOnce(examId);
     }
     throw new Error("job didn't settle");
   }
@@ -247,8 +257,9 @@ describeDb("Phase 4: judge and grading (e2e)", () => {
       data: { runAfter: new Date(0) },
     });
     // One attempt: recorded as an infrastructure error, then queued again for later.
+    const examId = await examOf(s.id);
     for (let i = 0; i < 20; i++) {
-      await worker.runOnce();
+      await worker.runOnce(examId);
       const j = await prisma.judgeJob.findUniqueOrThrow({ where: { submissionId: s.id } });
       if (j.attempts > 0) break;
     }
@@ -303,8 +314,9 @@ describeDb("Phase 4: judge and grading (e2e)", () => {
       where: { submissionId: s.id },
       data: { runAfter: new Date(0) },
     });
+    const examId = await examOf(s.id);
     for (let i = 0; i < 30; i++) {
-      await Promise.all([worker.runOnce(), other.runOnce()]);
+      await Promise.all([worker.runOnce(examId), other.runOnce(examId)]);
       const j = await prisma.judgeJob.findUniqueOrThrow({ where: { submissionId: s.id } });
       if (j.status === "DONE") break;
     }

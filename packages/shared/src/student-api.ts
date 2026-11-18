@@ -49,7 +49,14 @@ export interface StudentOverview {
     allowEarlySubmit: boolean;
     maxSubmissionsPerQuestion: number;
   };
-  seat: { registrationId: string; studentId: string; entered: boolean; finished: boolean };
+  seat: {
+    registrationId: string;
+    studentId: string;
+    entered: boolean;
+    finished: boolean;
+    /** True when staff ended this student's exam. */
+    finishedByStaff: boolean;
+  };
   clock: StudentClockView;
   questions: StudentQuestionSummary[];
 }
@@ -135,5 +142,7 @@ export const StudentErrorCode = {
   SubmissionLimit: "SUBMISSION_LIMIT",
   RunBusy: "RUN_BUSY",
   RunUnavailable: "RUN_UNAVAILABLE",
+  /** An invigilator blocked this seat. The client stops and shows the message. */
+  SeatBlocked: "SEAT_BLOCKED",
 } as const;
 export type StudentErrorCode = (typeof StudentErrorCode)[keyof typeof StudentErrorCode];

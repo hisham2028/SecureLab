@@ -71,9 +71,12 @@ export class JudgeWorker implements OnApplicationShutdown {
     await this.stop();
   }
 
-  /** Claims and processes one job. Returns false when there was nothing to do. */
-  async runOnce(): Promise<boolean> {
-    const job = await this.claim();
+  /**
+   * Claims and processes one job. Returns false when there was nothing to do. `examId` limits the
+   * claim to one exam's jobs; tests use it so suites sharing a database don't take each other's.
+   */
+  async runOnce(examId?: string): Promise<boolean> {
+    const job = await this.claim(examId);
     if (!job) return false;
     // Renew the lease while grading, so only a dead worker's jobs are taken over.
     const heartbeat = setInterval(() => {
@@ -92,7 +95,7 @@ export class JudgeWorker implements OnApplicationShutdown {
     return true;
   }
 
-  private async claim(): Promise<JudgeJob | null> {
+  private async claim(examId?: string): Promise<JudgeJob | null> {
     const leaseCutoff = new Date(Date.now() - JOB_LEASE_MS);
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       UPDATE "judge_jobs" SET
@@ -100,8 +103,12 @@ export class JudgeWorker implements OnApplicationShutdown {
         "attempts" = "attempts" + 1, "updated_at" = now()
       WHERE "id" = (
         SELECT "id" FROM "judge_jobs"
-        WHERE ("status" = 'QUEUED' AND "run_after" <= now())
-           OR ("status" = 'RUNNING' AND "locked_at" < ${leaseCutoff})
+        WHERE (("status" = 'QUEUED' AND "run_after" <= now())
+           OR ("status" = 'RUNNING' AND "locked_at" < ${leaseCutoff}))
+          AND (${examId ?? null}::uuid IS NULL OR "submission_id" IN (
+            SELECT s."id" FROM "submissions" s
+            JOIN "exam_questions" q ON q."id" = s."exam_question_id"
+            WHERE q."exam_id" = ${examId ?? null}::uuid))
         ORDER BY "created_at"
         FOR UPDATE SKIP LOCKED
         LIMIT 1
@@ -239,7 +246,9 @@ export class JudgeWorker implements OnApplicationShutdown {
       err instanceof JudgeInfraError
         ? err.message
         : `unexpected: ${(err as Error)?.message ?? err}`;
-    const giveUp = job.attempts >= MAX_JUDGE_ATTEMPTS;
+    const giveUp = job.attempts >= job.attemptLimit;
+    // Attempt number within the current round (a host's "grade again" starts a new round).
+    const roundAttempt = job.attempts - (job.attemptLimit - MAX_JUDGE_ATTEMPTS);
     this.logger.error(
       JSON.stringify({
         msg: "judge_infra_failure",
@@ -260,7 +269,7 @@ export class JudgeWorker implements OnApplicationShutdown {
               lockedAt: null,
               lockedBy: null,
               lastError: message.slice(0, 1000),
-              runAfter: new Date(Date.now() + retryDelayMs(job.attempts)),
+              runAfter: new Date(Date.now() + retryDelayMs(roundAttempt)),
             },
       });
       if (owned.count !== 1) return;

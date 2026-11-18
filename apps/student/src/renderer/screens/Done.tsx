@@ -24,6 +24,12 @@ export function Done({
     <div className="center-page">
       <main className="card done">
         <h1>{TITLE[reason]}</h1>
+        {overview?.seat.finishedByStaff && (
+          <p>
+            <strong>The invigilator ended your exam.</strong> If you think this is a mistake, raise
+            your hand now.
+          </p>
+        )}
         <p>Your submissions are stored on the exam server. You can&apos;t change them now.</p>
         {overview && overview.questions.length > 0 && (
           <ul className="done-list">
@@ -38,6 +44,10 @@ export function Done({
             ))}
           </ul>
         )}
+        <p className="muted">
+          When your teacher publishes results, choose <strong>Check my result</strong> on the
+          sign-in screen and use the same exam code, student ID and PIN.
+        </p>
         <p className="muted">Follow the invigilator&apos;s instructions before you leave.</p>
         <button type="button" onClick={onSignOut}>
           Sign out

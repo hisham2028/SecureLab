@@ -2,14 +2,21 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
+import type { SessionEventType } from "@prisma/client";
 import { JwtService } from "@nestjs/jwt";
 import {
   normalizeStudentId,
   StudentIdRuleSchema,
+  formatCents,
+  isOnline,
   studentClock,
+  type HeartbeatRequest,
+  type HeartbeatResponse,
   type StudentOverview,
+  type StudentResult,
   type StudentQuestion,
 } from "@securelab/shared";
 import { PrismaService } from "../prisma/prisma.service";
@@ -18,7 +25,7 @@ import { ExamsService } from "../exams/exams.service";
 import type { StudentPrincipal } from "../auth/auth.types";
 import { credentialVersion, hashPin, MAX_PIN_FAILURES, verifyPin } from "../registrations/pin";
 import { studentQuestionView } from "../exams/student-view";
-import { SeatService, type Seat } from "./seat.service";
+import { seatBlocked, SeatService, type Seat } from "./seat.service";
 import { randomUUID } from "node:crypto";
 
 const LOGIN_FAILED = "Exam code, student ID or PIN is incorrect.";
@@ -38,6 +45,59 @@ export class StudentService {
   ) {}
 
   async login(accessCode: string, rawStudentId: string, pin: string, cid?: string) {
+    const { exam, reg, fail } = await this.verifySeat(accessCode, rawStudentId, pin, cid);
+    if (reg.blockedAt) {
+      await fail("blocked");
+      throw seatBlocked();
+    }
+    const settled = await this.exams.settle(exam);
+    if (!SIGNIN_STATUSES.includes(settled.status)) {
+      await fail(`exam_${settled.status.toLowerCase()}`);
+      throw new ConflictException(
+        settled.status === "COMPLETED" || settled.status === "ARCHIVED"
+          ? "This exam has ended."
+          : "This exam isn't open yet. Wait for the invigilator.",
+      );
+    }
+
+    const sid = randomUUID();
+    const now = new Date();
+    // Another PC is signed in to this seat right now: worth an invigilator's look.
+    if (this.seats.isInside({ exam: settled, reg }) && isOnline(reg.lastSeenAt, now)) {
+      await this.prisma.sessionEvent.create({
+        data: {
+          registrationId: reg.id,
+          type: "PARALLEL_SIGNIN",
+          occurredAt: now,
+          details: { previousSession: reg.activeSessionId, newSession: sid },
+        },
+      });
+    }
+    await this.audit.record({
+      institutionId: exam.institutionId,
+      actorType: "student",
+      actorId: reg.id,
+      action: "student.login",
+      targetType: "exam",
+      targetId: exam.id,
+      correlationId: cid,
+    });
+    const principal: StudentPrincipal = {
+      sub: reg.id,
+      examId: exam.id,
+      institutionId: exam.institutionId,
+      cv: credentialVersion(reg.pinHash),
+      sid,
+      kind: "student",
+    };
+    return { accessToken: await this.jwt.signAsync(principal, { expiresIn: 12 * 3600 }) };
+  }
+
+  /**
+   * Checks exam code, student ID and PIN with lockout after repeated wrong PINs. Shared by
+   * sign-in and the result lookup, so both count towards the same lockout.
+   */
+  private async verifySeat(accessCode: string, rawStudentId: string, pin: string, cid?: string) {
     const exam = await this.prisma.exam.findUnique({ where: { accessCode } });
     const rule = exam ? StudentIdRuleSchema.safeParse(exam.studentIdRule) : null;
     const studentId = rule?.success
@@ -87,39 +147,13 @@ export class StudentService {
       throw new UnauthorizedException(LOGIN_FAILED);
     }
 
-    const settled = await this.exams.settle(exam);
-    if (!SIGNIN_STATUSES.includes(settled.status)) {
-      await fail(`exam_${settled.status.toLowerCase()}`);
-      throw new ConflictException(
-        settled.status === "COMPLETED" || settled.status === "ARCHIVED"
-          ? "This exam has ended."
-          : "This exam isn't open yet. Wait for the invigilator.",
-      );
-    }
-
     if (reg.failedPinCount > 0) {
       await this.prisma.examRegistration.update({
         where: { id: reg.id },
         data: { failedPinCount: 0 },
       });
     }
-    await this.audit.record({
-      institutionId: exam.institutionId,
-      actorType: "student",
-      actorId: reg.id,
-      action: "student.login",
-      targetType: "exam",
-      targetId: exam.id,
-      correlationId: cid,
-    });
-    const principal: StudentPrincipal = {
-      sub: reg.id,
-      examId: exam.id,
-      institutionId: exam.institutionId,
-      cv: credentialVersion(reg.pinHash),
-      kind: "student",
-    };
-    return { accessToken: await this.jwt.signAsync(principal, { expiresIn: 12 * 3600 }) };
+    return { exam, reg, fail };
   }
 
   async overview(p: StudentPrincipal): Promise<StudentOverview> {
@@ -143,6 +177,7 @@ export class StudentService {
         studentId: reg.examStudentId,
         entered: reg.firstEnteredAt !== null,
         finished: reg.finishedAt !== null,
+        finishedByStaff: reg.finishedById !== null,
       },
       clock: {
         deadline: clock.deadline?.toISOString() ?? null,
@@ -182,8 +217,16 @@ export class StudentService {
 
   async enter(p: StudentPrincipal, cid?: string) {
     const { exam, reg } = await this.seats.load(p);
-    const clock = studentClock(exam, reg, new Date());
-    if (!clock.canEnter) {
+    const now = new Date();
+    const clock = studentClock(exam, reg, now);
+    // An invigilator can let a student in after the late-entry window has closed.
+    const reentry =
+      reg.reentryUntil !== null &&
+      reg.reentryUntil > now &&
+      reg.finishedAt === null &&
+      (exam.status === "RUNNING" || exam.status === "PAUSED") &&
+      (clock.remainingSeconds ?? 0) > 0;
+    if (!clock.canEnter && !reentry) {
       throw new ConflictException(
         exam.status === "PUBLISHED"
           ? "The exam hasn't started yet."
@@ -287,5 +330,149 @@ export class StudentService {
       correlationId: cid,
     });
     return this.overview(p);
+  }
+
+  /**
+   * Called every few seconds by the client: marks the seat online, records where the student is
+   * working and any focus changes, and returns announcements. Gaps between heartbeats are
+   * recorded as reconnects so the host can tell a network drop from anything else.
+   */
+  async heartbeat(p: StudentPrincipal, body: HeartbeatRequest): Promise<HeartbeatResponse> {
+    const seat = await this.seats.load(p);
+    const { exam, reg } = seat;
+    const now = new Date();
+    const inside = this.seats.isInside(seat);
+    const events: { type: SessionEventType; occurredAt: Date; details?: object }[] = [];
+    if (inside && reg.lastSeenAt && !isOnline(reg.lastSeenAt, now)) {
+      events.push({
+        type: "RECONNECTED",
+        occurredAt: now,
+        details: { offlineSeconds: Math.round((now.getTime() - reg.lastSeenAt.getTime()) / 1000) },
+      });
+    }
+    if (
+      inside &&
+      p.sid &&
+      reg.activeSessionId &&
+      reg.activeSessionId !== p.sid &&
+      isOnline(reg.lastSeenAt, now)
+    ) {
+      const recent = await this.prisma.sessionEvent.count({
+        where: {
+          registrationId: reg.id,
+          type: "PARALLEL_SIGNIN",
+          occurredAt: { gt: new Date(now.getTime() - 5 * 60_000) },
+        },
+      });
+      if (recent === 0)
+        events.push({
+          type: "PARALLEL_SIGNIN",
+          occurredAt: now,
+          details: { previousSession: reg.activeSessionId, newSession: p.sid },
+        });
+    }
+    for (const e of (inside ? body.events : undefined) ?? []) {
+      // Client clocks can be wrong; keep their time only when it is plausible.
+      const at = new Date(e.at);
+      const plausible = Math.abs(at.getTime() - now.getTime()) < 10 * 60_000;
+      events.push({
+        type: e.type,
+        occurredAt: plausible ? at : now,
+        details: plausible ? undefined : { clientTime: e.at },
+      });
+    }
+
+    let currentQuestionId: string | null | undefined = undefined;
+    if (body.currentQuestionId !== undefined) {
+      const ok =
+        body.currentQuestionId === null ||
+        (await this.prisma.examQuestion.count({
+          where: { id: body.currentQuestionId, examId: exam.id },
+        })) === 1;
+      if (ok) currentQuestionId = body.currentQuestionId;
+    }
+    await this.prisma.$transaction([
+      this.prisma.examRegistration.update({
+        where: { id: reg.id },
+        data: {
+          lastSeenAt: now,
+          activeSessionId: p.sid ?? reg.activeSessionId,
+          ...(currentQuestionId !== undefined && { currentQuestionId }),
+          ...(body.language !== undefined && { currentLanguage: body.language }),
+        },
+      }),
+      this.prisma.sessionEvent.createMany({
+        data: events.map((e) => ({
+          registrationId: reg.id,
+          type: e.type,
+          occurredAt: e.occurredAt,
+          details: e.details,
+        })),
+      }),
+    ]);
+    const announcements = await this.prisma.announcement.findMany({
+      where: { examId: exam.id },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+    return {
+      serverTime: now.toISOString(),
+      announcements: announcements.map((a) => ({
+        id: a.id,
+        message: a.message,
+        createdAt: a.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * A student's own published result, checked with the same exam code, student ID and PIN as
+   * sign-in. Nothing is returned until the host publishes results.
+   */
+  async result(accessCode: string, rawStudentId: string, pin: string, cid?: string) {
+    const { exam, reg } = await this.verifySeat(accessCode, rawStudentId, pin, cid);
+    const entry = exam.publishedReleaseId
+      ? await this.prisma.resultEntry.findUnique({
+          where: {
+            releaseId_registrationId: {
+              releaseId: exam.publishedReleaseId,
+              registrationId: reg.id,
+            },
+          },
+        })
+      : null;
+    if (!entry || !exam.resultsPublishedAt) {
+      throw new NotFoundException("Results for this exam haven't been published yet.");
+    }
+    await this.audit.record({
+      institutionId: exam.institutionId,
+      actorType: "student",
+      actorId: reg.id,
+      action: "student.result_viewed",
+      targetType: "exam",
+      targetId: exam.id,
+      metadata: { releaseId: entry.releaseId },
+      correlationId: cid,
+    });
+    const questions = entry.questions as unknown as {
+      ordinal: number;
+      title: string;
+      points: number;
+      mark: string;
+    }[];
+    const result: StudentResult = {
+      examTitle: exam.title,
+      studentId: entry.studentId,
+      total: formatCents(Math.round(Number(entry.total) * 100)),
+      maxTotal: formatCents(Math.round(Number(entry.maxTotal) * 100)),
+      publishedAt: exam.resultsPublishedAt.toISOString(),
+      questions: questions.map((q) => ({
+        ordinal: q.ordinal,
+        title: q.title,
+        points: q.points,
+        mark: q.mark,
+      })),
+    };
+    return result;
   }
 }

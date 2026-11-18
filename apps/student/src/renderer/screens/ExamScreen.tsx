@@ -11,6 +11,8 @@ import { api, ApiError, connection, serverClock } from "../lib/api";
 import { useStore } from "../lib/store";
 import { formatCountdown } from "../lib/server-clock";
 import { LANGUAGE_LABEL, STARTER, timeOf } from "../lib/labels";
+import { useHeartbeat, useUnseen } from "../lib/heartbeat";
+import { Announcements } from "../ui/Announcements";
 import { readPref, writePref } from "../lib/prefs";
 import { CodeEditor, type CodeEditorHandle } from "../CodeEditor";
 import { useDrafts } from "../exam/useDrafts";
@@ -182,6 +184,14 @@ export function ExamScreen({ overview, onOverview, onFinished }: Props) {
       (f) => FONT_SIZES[Math.min(FONT_SIZES.length - 1, Math.max(0, FONT_SIZES.indexOf(f) + dir))],
     );
 
+  // ---- heartbeat and announcements ---------------------------------------------------------
+  const announcements = useHeartbeat({
+    enabled: !leaving,
+    currentQuestionId: currentId,
+    language,
+  });
+  const { unseen, dismiss } = useUnseen(seatId, announcements);
+
   const draftStatus = question && language ? sync.status(question.id, language) : null;
   const currentCode = () =>
     (question && language ? sync.code(question.id, language) : undefined) ??
@@ -343,6 +353,7 @@ export function ExamScreen({ overview, onOverview, onFinished }: Props) {
           resumes.
         </Banner>
       )}
+      <Announcements items={unseen} onDismiss={dismiss} />
       {restoreNote && <Banner tone="info">{restoreNote}</Banner>}
       {leaving && (
         <Banner tone="info">

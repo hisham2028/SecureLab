@@ -362,13 +362,21 @@ export class ExamsService {
       where: { id: reg.id },
       data: { extensionMinutes },
     });
-    await this.auditExam(
-      user,
-      examId,
-      "registration.extension_set",
-      { registrationId, from: reg.extensionMinutes, to: extensionMinutes, reason },
-      cid,
-    );
+    await this.audit.record({
+      institutionId: user.institutionId,
+      actorType: "staff",
+      actorId: user.sub,
+      action: "registration.extension_set",
+      targetType: "registration",
+      targetId: registrationId,
+      metadata: {
+        examId,
+        reason,
+        previous: { extensionMinutes: reg.extensionMinutes },
+        next: { extensionMinutes },
+      },
+      correlationId: cid,
+    });
     return { registrationId, extensionMinutes };
   }
 }

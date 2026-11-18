@@ -149,10 +149,16 @@ model Exam {
   completedAt               DateTime?          @map("completed_at")
   /// Optimistic concurrency token; bumped on every update.
   revision                  Int                @default(1)
+  /// The result release students can see. Null means results are hidden.
+  publishedReleaseId        String?            @map("published_release_id") @db.Uuid
+  resultsPublishedAt        DateTime?          @map("results_published_at")
   createdAt                 DateTime           @default(now()) @map("created_at")
   updatedAt                 DateTime           @updatedAt @map("updated_at")
   questions                 ExamQuestion[]
   registrations             ExamRegistration[]
+  announcements             Announcement[]
+  notes                     IncidentNote[]
+  releases                  ResultRelease[]
 
   @@index([institutionId, status])
   @@map("exams")
@@ -228,8 +234,9 @@ model ExamQuestion {
   ordinal           Int
   points            Int
 
-  drafts      StudentDraft[]
-  submissions Submission[]
+  drafts          StudentDraft[]
+  submissions     Submission[]
+  markAdjustments MarkAdjustment[]
 
   @@unique([examId, ordinal])
   @@unique([examId, questionVersionId])
@@ -254,24 +261,40 @@ model Student {
 
 /// Exam-attempt identity: a student's seat in one exam, with its own credential.
 model ExamRegistration {
-  id               String         @id @default(uuid()) @db.Uuid
-  examId           String         @map("exam_id") @db.Uuid
-  exam             Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
-  studentId        String         @map("student_id") @db.Uuid
-  student          Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  id                String           @id @default(uuid()) @db.Uuid
+  examId            String           @map("exam_id") @db.Uuid
+  exam              Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId         String           @map("student_id") @db.Uuid
+  student           Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
   /// Copy of the normalized ID used for the per-exam uniqueness rule.
-  examStudentId    String         @map("exam_student_id")
-  pinHash          String         @map("pin_hash")
-  failedPinCount   Int            @default(0) @map("failed_pin_count")
-  lockedAt         DateTime?      @map("locked_at")
-  extensionMinutes Int            @default(0) @map("extension_minutes")
-  firstEnteredAt   DateTime?      @map("first_entered_at")
-  finishedAt       DateTime?      @map("finished_at")
+  examStudentId     String           @map("exam_student_id")
+  pinHash           String           @map("pin_hash")
+  failedPinCount    Int              @default(0) @map("failed_pin_count")
+  lockedAt          DateTime?        @map("locked_at")
+  extensionMinutes  Int              @default(0) @map("extension_minutes")
+  firstEnteredAt    DateTime?        @map("first_entered_at")
+  finishedAt        DateTime?        @map("finished_at")
   /// SEQUENTIAL exams: index of the question the student is on (0-based, in ordinal order).
-  navigationIndex  Int            @default(0) @map("navigation_index")
-  createdAt        DateTime       @default(now()) @map("created_at")
-  drafts           StudentDraft[]
-  submissions      Submission[]
+  navigationIndex   Int              @default(0) @map("navigation_index")
+  /// Live monitoring: last heartbeat and where the student is working.
+  lastSeenAt        DateTime?        @map("last_seen_at")
+  currentQuestionId String?          @map("current_question_id") @db.Uuid
+  currentLanguage   Language?        @map("current_language")
+  /// The sign-in session that sent the last heartbeat (detects a second PC).
+  activeSessionId   String?          @map("active_session_id") @db.Uuid
+  blockedAt         DateTime?        @map("blocked_at")
+  blockedReason     String?          @map("blocked_reason")
+  /// An invigilator let this student (back) in after entry closed or after finishing.
+  reentryUntil      DateTime?        @map("reentry_until")
+  /// Set when staff ended this student's exam (force finish).
+  finishedById      String?          @map("finished_by_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at")
+  drafts            StudentDraft[]
+  submissions       Submission[]
+  events            SessionEvent[]
+  notes             IncidentNote[]
+  markAdjustments   MarkAdjustment[]
+  resultEntries     ResultEntry[]
 
   @@unique([examId, examStudentId])
   @@index([studentId])
@@ -332,6 +355,8 @@ model Submission {
   testsPassed        Int?             @map("tests_passed")
   testsTotal         Int?             @map("tests_total")
   gradedAt           DateTime?        @map("graded_at")
+  /// Staff member who submitted this on the student's behalf (force finish). Null: the student.
+  submittedById      String?          @map("submitted_by_id") @db.Uuid
   createdAt          DateTime         @default(now()) @map("created_at")
   job                JudgeJob?
   evaluations        Evaluation[]
@@ -358,6 +383,8 @@ model JudgeJob {
   submission   Submission     @relation(fields: [submissionId], references: [id], onDelete: Restrict)
   status       JudgeJobStatus @default(QUEUED)
   attempts     Int            @default(0)
+  /// Raised by a host's "grade again" after the job gave up (each round gets the full retries).
+  attemptLimit Int            @default(5) @map("attempt_limit")
   runAfter     DateTime       @default(now()) @map("run_after")
   lockedAt     DateTime?      @map("locked_at")
   lockedBy     String?        @map("locked_by")
@@ -415,4 +442,114 @@ model EvaluationTest {
 
   @@unique([evaluationId, ordinal])
   @@map("evaluation_tests")
+}
+
+// ---------------------------------------------------------------- Phase 5: monitoring and results
+
+enum SessionEventType {
+  FOCUS_LOST
+  FOCUS_RETURNED
+  RECONNECTED
+  PARALLEL_SIGNIN
+}
+
+/// What the student client and server observed about a seat. Informational, not misconduct.
+model SessionEvent {
+  id             BigInt           @id @default(autoincrement())
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  type           SessionEventType
+  occurredAt     DateTime         @map("occurred_at")
+  receivedAt     DateTime         @default(now()) @map("received_at")
+  details        Json?
+
+  @@index([registrationId, type])
+  @@map("session_events")
+}
+
+model Announcement {
+  id          String   @id @default(uuid()) @db.Uuid
+  examId      String   @map("exam_id") @db.Uuid
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  message     String
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([examId, createdAt])
+  @@map("announcements")
+}
+
+/// Invigilator notes about an exam or one seat. Append-only.
+model IncidentNote {
+  id             String            @id @default(uuid()) @db.Uuid
+  examId         String            @map("exam_id") @db.Uuid
+  exam           Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  registrationId String?           @map("registration_id") @db.Uuid
+  registration   ExamRegistration? @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  authorId       String            @map("author_id") @db.Uuid
+  note           String
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  @@index([examId, createdAt])
+  @@index([registrationId])
+  @@map("incident_notes")
+}
+
+enum MarkAdjustmentKind {
+  OVERRIDE
+  RUBRIC
+}
+
+/// A manual change to one question's mark for one student. Append-only; the latest one counts.
+model MarkAdjustment {
+  id             String             @id @default(uuid()) @db.Uuid
+  registrationId String             @map("registration_id") @db.Uuid
+  registration   ExamRegistration   @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  examQuestionId String             @map("exam_question_id") @db.Uuid
+  examQuestion   ExamQuestion       @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  kind           MarkAdjustmentKind
+  /// The automatic mark when this adjustment was made.
+  autoMark       Decimal            @map("auto_mark") @db.Decimal(8, 2)
+  previousMark   Decimal            @map("previous_mark") @db.Decimal(8, 2)
+  newMark        Decimal            @map("new_mark") @db.Decimal(8, 2)
+  /// RUBRIC: [{ label, points }] added to the automatic mark (points may be negative).
+  rubric         Json?
+  reason         String
+  actorId        String             @map("actor_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  @@index([registrationId, examQuestionId, createdAt])
+  @@map("mark_adjustments")
+}
+
+/// A frozen copy of an exam's results. Students only ever see a published release.
+model ResultRelease {
+  id          String        @id @default(uuid()) @db.Uuid
+  examId      String        @map("exam_id") @db.Uuid
+  exam        Exam          @relation(fields: [examId], references: [id], onDelete: Restrict)
+  version     Int
+  maxTotal    Decimal       @map("max_total") @db.Decimal(10, 2)
+  createdById String        @map("created_by_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  entries     ResultEntry[]
+
+  @@unique([examId, version])
+  @@map("result_releases")
+}
+
+model ResultEntry {
+  id             String           @id @default(uuid()) @db.Uuid
+  releaseId      String           @map("release_id") @db.Uuid
+  release        ResultRelease    @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  registrationId String           @map("registration_id") @db.Uuid
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  studentId      String           @map("student_id")
+  fullName       String           @map("full_name")
+  total          Decimal          @db.Decimal(10, 2)
+  maxTotal       Decimal          @map("max_total") @db.Decimal(10, 2)
+  /// [{ examQuestionId, ordinal, title, points, autoMark, mark, adjusted }]
+  questions      Json
+
+  @@unique([releaseId, registrationId])
+  @@map("result_entries")
 }

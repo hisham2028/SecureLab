@@ -7,7 +7,7 @@ integration, built phase by phase from the development roadmap.
 | Path              | What it is                                                                                                     |
 | ----------------- | -------------------------------------------------------------------------------------------------------------- |
 | `apps/api`        | NestJS API and grading worker: staff auth, roles, audit log, exams, Judge0 grading queue. Postgres via Prisma. |
-| `apps/host`       | React + Vite host dashboard: exams, question bank, students and PIN slips.                                     |
+| `apps/host`       | React + Vite host dashboard: exams, question bank, students, PIN slips, live exam room, marks and results.     |
 | `apps/student`    | Electron student client (Windows first): sandboxed renderer, Monaco, encrypted local autosave.                 |
 | `packages/shared` | Types and rules shared by all apps: exam lifecycle, custom student ID validation, verdicts.                    |
 | `infra`           | Local docker-compose (Postgres, Redis, Judge0) the Judge0 isolation spike, and the grading benchmarks.         |
@@ -53,19 +53,29 @@ Staff routes (bearer token from `POST /v1/auth/login`):
 | `GET/POST /v1/exams/:id/registrations`, `POST .../import`                            | admin, host                             | Register students; CSV import is all-or-nothing with row-level errors. |
 | `POST .../registrations/:rid/reset-pin`, `PUT .../:rid/extension`                    | invigilator+, host+                     | Unlock a seat with a new PIN; give extra time.                         |
 | `GET/POST/PATCH /v1/staff`                                                           | admin                                   | Staff accounts and roles.                                              |
+| `GET /v1/exams/:id/monitor`, `GET .../registrations/:rid/detail`                     | all staff                               | Live exam room (filters, search, paging) and one seat's timeline.      |
+| `GET/POST .../announcements`, `GET/POST .../notes`                                   | all staff                               | Announce to every student; write incident notes (append-only).         |
+| `POST .../registrations/:rid/block`, `.../unblock`, `.../reentry`                    | all staff                               | Block or unblock a seat, or let a finished student back in. Reasoned.  |
+| `POST .../registrations/:rid/force-finish`, `POST .../submissions/:sid/regrade`      | admin, host                             | Submit a student's drafts and finish; grade a failed submission again. |
+| `GET .../submissions/:sid`                                                           | admin, host                             | Submission review: code, attempts, per-test results.                   |
+| `POST .../registrations/:rid/questions/:qid/marks`                                   | admin, host                             | Override or rubric-mark a question. Reason required, history kept.     |
+| `GET .../results`, `POST .../results/finalize`, `.../publish`, `.../hide`            | admin, host                             | Provisional marks and analytics; save, publish or hide a version.      |
+| `GET .../results/:releaseId/export.csv`                                              | admin, host                             | CSV of a saved version.                                                |
 
 Student routes (token from `POST /v1/student/session` with access code, student ID and PIN). All are
 scoped to the caller's own seat; hidden test cases never reach them.
 
-| Route                                                       | Purpose                                                                                |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET /v1/student/exam`, `POST .../enter`, `POST .../finish` | Overview with server time and clock, enter the exam, finish early.                     |
-| `GET /v1/student/exam/questions/:id`                        | Question with samples and the languages allowed for it.                                |
-| `POST /v1/student/exam/next`                                | Sequential exams: move to the next question (no way back).                             |
-| `GET /v1/student/exam/drafts`, `PUT .../drafts/:id/:lang`   | Server drafts per question and language; an older revision is refused (`STALE_DRAFT`). |
-| `POST /v1/student/exam/questions/:id/run`                   | Run code on the student's own input through Judge0.                                    |
-| `POST /v1/student/exam/questions/:id/submissions`           | Immutable submission snapshot; retries with the same client ID return the same one.    |
-| `GET /v1/student/exam/submissions[/:id]`                    | The student's own submissions and their status.                                        |
+| Route                                                       | Purpose                                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /v1/student/exam`, `POST .../enter`, `POST .../finish` | Overview with server time and clock, enter the exam, finish early.                         |
+| `GET /v1/student/exam/questions/:id`                        | Question with samples and the languages allowed for it.                                    |
+| `POST /v1/student/exam/next`                                | Sequential exams: move to the next question (no way back).                                 |
+| `GET /v1/student/exam/drafts`, `PUT .../drafts/:id/:lang`   | Server drafts per question and language; an older revision is refused (`STALE_DRAFT`).     |
+| `POST /v1/student/exam/questions/:id/run`                   | Run code on the student's own input through Judge0.                                        |
+| `POST /v1/student/exam/questions/:id/submissions`           | Immutable submission snapshot; retries with the same client ID return the same one.        |
+| `GET /v1/student/exam/submissions[/:id]`                    | The student's own submissions and their status.                                            |
+| `POST /v1/student/exam/heartbeat`                           | Presence every 15 s: question and language on screen, focus changes, new announcements.    |
+| `POST /v1/student/result`                                   | The student's own published result (access code, student ID and PIN; 404 until published). |
 
 See [ADR 0005](docs/adr/0005-student-drafts-and-submissions.md) for how drafts, sync and
 submissions fit together.
@@ -79,6 +89,16 @@ each grades at once. Judge outages are retried and never become wrong answers. S
 [ADR 0006](docs/adr/0006-judge-queue-and-scoring.md) and the
 [execution boundary report](docs/security/execution-boundary.md), which also explains how to run
 the adversarial checks and the load benchmark in `infra/judge-bench`.
+
+### Monitoring and results
+
+The Live tab shows every seat's status, connection, current question and flags, and refreshes
+every 10 seconds. Disconnects (no heartbeat for 45 seconds) and leaving the exam window are shown
+as context; only a second sign-in for the same seat and a PIN lockout are flagged as warnings, and
+nothing is acted on automatically. Every host action asks for a reason and is written to the audit
+log with the previous and new state. Marks can be changed by hand or against a rubric with a
+reason; the history is kept. Results are saved as immutable versions and students see only the
+version you publish. See [ADR 0007](docs/adr/0007-monitoring-marks-results.md).
 
 ### Pointing the student app at a server
 
