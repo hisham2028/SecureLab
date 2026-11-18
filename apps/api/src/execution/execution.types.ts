@@ -24,8 +24,10 @@ export interface ExecutionResult {
 }
 
 /**
- * Boundary between SecureLab and whatever runs untrusted code. The API never compiles
- * or runs student code itself; it only talks to a provider over the network.
+ * Boundary between SecureLab and whatever runs untrusted code. In production the API never
+ * compiles or runs student code itself; it only talks to Judge0 over the network. The local
+ * provider (SecureLab Lite, for trying the app out) is the one exception and is refused in
+ * production.
  */
 export interface ExecutionProvider {
   execute(req: ExecutionRequest): Promise<ExecutionResult>;
