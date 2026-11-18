@@ -1,0 +1,18 @@
+# One-machine setup: Judge0 on the same machine as SecureLab (a small pilot, or a Linux VM on a
+# Windows PC). Use it together with compose.yml:
+#
+#   docker compose -f deploy/judge0/compose.yml -f deploy/judge0/one-machine.yml up -d
+#
+# Port 2358 is not published, so nothing on the network can reach Judge0. The SecureLab API
+# reaches it as http://judge0:2358 over a private Docker network (see deploy/one-machine.yml).
+services:
+  server:
+    ports: !reset []
+    networks:
+      default: {}
+      link:
+        aliases: [judge0]
+
+networks:
+  link:
+    name: securelab-judge-link

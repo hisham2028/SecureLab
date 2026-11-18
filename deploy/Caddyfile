@@ -2,6 +2,12 @@
 # SECURELAB_TLS: "internal" (Caddy's own CA; install its root on lab PCs), an email address for
 #                Let's Encrypt (public DNS name needed), or "/certs/cert.pem /certs/key.pem" for
 #                a certificate from your institution.
+{
+	# Browsers and apps send no server name (SNI) when the address is an IP, as on a one-machine
+	# setup without a DNS name. This picks the right certificate for them.
+	default_sni {$SECURELAB_DOMAIN}
+}
+
 {$SECURELAB_DOMAIN} {
 	tls {$SECURELAB_TLS}
 	encode gzip

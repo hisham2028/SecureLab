@@ -26,7 +26,8 @@ The [deployment package](../../deploy/README.md) sets up most of this; tick each
 done on the pilot server.
 
 - [ ] **(you)** Server machine chosen. Judge0 on a separate VM from the database (Phase 4
-      report).
+      report), or, for the pilot only, both on one machine
+      ([Windows server guide](../guides/windows-server.md)).
 - [x] HTTPS in front of the API, `TRUST_PROXY` set, security headers (Caddy in
       `deploy/compose.yml`, security review S10)
 - [ ] **(you)** HTTPS certificate chosen (institution certificate, Let's Encrypt, or Caddy's

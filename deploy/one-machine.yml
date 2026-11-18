@@ -1,0 +1,16 @@
+# One-machine setup: SecureLab and Judge0 on the same machine. Start Judge0 first with
+# deploy/judge0/one-machine.yml, set JUDGE0_URL=http://judge0:2358 in deploy/.env, then:
+#
+#   docker compose -f deploy/compose.yml -f deploy/one-machine.yml --env-file deploy/.env up -d --build
+#
+# deploy/one-machine.sh does all of this. Guide: docs/guides/windows-server.md.
+services:
+  api:
+    networks: [default, judge0]
+  worker:
+    networks: [default, judge0]
+
+networks:
+  judge0:
+    name: securelab-judge-link
+    external: true
