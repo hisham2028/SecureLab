@@ -251,6 +251,14 @@ function missingTool(command: string, e: NodeJS.ErrnoException): Error {
   );
 }
 
+/**
+ * On Windows, C, C++ and Python print "\r\n" for each "\n". Turn it back so students see the
+ * same output as with Judge0 on Linux. (Grading already ignores the difference.)
+ */
+function unixLines(s: string): string {
+  return IS_WINDOWS ? s.replace(/\r\n/g, "\n") : s;
+}
+
 function result(
   verdict: ExecutionResult["verdict"],
   r: {
@@ -263,9 +271,9 @@ function result(
 ): ExecutionResult {
   return {
     verdict,
-    stdout: r.stdout ?? "",
-    stderr: r.stderr ?? "",
-    compileOutput: r.compileOutput ?? "",
+    stdout: unixLines(r.stdout ?? ""),
+    stderr: unixLines(r.stderr ?? ""),
+    compileOutput: unixLines(r.compileOutput ?? ""),
     timeSeconds: r.timeSeconds === undefined ? null : Math.round(r.timeSeconds * 1000) / 1000,
     memoryKb: null,
     providerStatus: `local:${r.status}`,
