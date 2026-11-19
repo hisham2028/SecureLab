@@ -11,6 +11,9 @@ Linux (WSL2) doesn't either, and it can't be switched on there
 virtual machine (VM), and SecureLab and Judge0 run together inside it. You set the VM up once.
 After that, everything is copy and paste.
 
+**Using Hyper-V on Windows 11 Pro or Education?** The [one-PC Hyper-V guide](one-pc-hyper-v.md)
+walks through the same setup with exact PowerShell commands, VM sizes, a fixed address and AI help.
+
 ## What you need
 
 |                 | Up to about 60 students         | With AI help too                  |
