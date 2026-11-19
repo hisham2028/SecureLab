@@ -9,5 +9,5 @@
     "noEmit": true,
     "paths": { "@securelab/shared": ["../../packages/shared/src/index.ts"] }
   },
-  "include": ["src/renderer", "vite.config.ts"]
+  "include": ["src/renderer", "vite.config.ts", "vite.web.config.ts"]
 }

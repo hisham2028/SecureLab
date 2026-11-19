@@ -944,3 +944,24 @@ button.link.block-link {
   flex-wrap: wrap;
   gap: var(--s2);
 }
+
+/* Browser version: covers a locked-screen exam while it isn't full screen. */
+.web-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--s4, 24px);
+  background: var(--bg);
+}
+.web-lock-box {
+  max-width: 34rem;
+  padding: var(--s4, 24px);
+  background: var(--surface);
+  border: 1px solid var(--border, #d0d0d5);
+  border-radius: var(--radius, 8px);
+}
+.web-lock-box h2 {
+  margin-top: 0;
+}

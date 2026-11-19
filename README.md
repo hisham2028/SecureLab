@@ -15,9 +15,10 @@ integration, built phase by phase from the development roadmap.
 
 ## Just want to try it?
 
-**SecureLab Lite** runs the whole app on one Windows (or Mac/Linux) PC, with no Docker and no
-Judge0, in about 1.6 GB: `node lite/securelab-lite.mjs setup`, then `start`. It's for looking
-around only, since student code runs without a sandbox. See [lite/README.md](lite/README.md).
+**SecureLab Lite** is the web version on one Windows (or Mac/Linux) PC, with no Docker and no
+Judge0: `node lite/securelab-lite.mjs setup`, then `start`. Students take the exam in a browser
+on the same network, and their code runs as WebAssembly inside the server, so no Python or
+compiler is installed anywhere. See [lite/README.md](lite/README.md).
 
 ## Getting started
 

@@ -26,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@antonz/python-wasi':
+        specifier: 3.12.0
+        version: 3.12.0
       '@nestjs/common':
         specifier: ^11.1.0
         version: 11.2.10(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -47,6 +50,9 @@ importers:
       '@securelab/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@yowasp/clang':
+        specifier: 22.0.0-git20695-13
+        version: 22.0.0-git20695-13
       argon2:
         specifier: ^0.45.2
         version: 0.45.2
@@ -188,6 +194,9 @@ packages:
 
   '@acemir/cssom@0.9.33':
     resolution: {integrity: sha512-52IMmrBsIsDZLp/KFM+KmaMLJ8GTj113K+iFGFCoOjstZSZbsAxMJE8KYtwao7bz1LsEG810ts1m5wvkVEqPlg==}
+
+  '@antonz/python-wasi@3.12.0':
+    resolution: {integrity: sha512-HPAJPGMGRU2eBcXbOfyCnqiTUBrXNGJv0hkXaFXk6TQSRYEP2OVrdHE/JKbR2aTXe+A7uI1n42gVFOVHLGJolw==}
 
   '@asamuzakjp/css-color@4.1.2':
     resolution: {integrity: sha512-NfBUvBaYgKIuq6E/RBLY1m0IohzNHAYyaJGuTK79Z23uNwmz2jl1mPsC5ZxCCxylinKhT1Amn5oNTlx1wN8cQg==}
@@ -1547,6 +1556,9 @@ packages:
   '@xmldom/xmldom@0.8.15':
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
     engines: {node: '>=10.0.0'}
+
+  '@yowasp/clang@22.0.0-git20695-13':
+    resolution: {integrity: sha512-nNIUdoQKrttdSEvO7gpkgczB1fhRtiWEqxYNJHloD9EBf0HBu1bvcYnkTYTmUacXDItRGTFWnogWKnfSe+04Cg==}
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -4128,6 +4140,8 @@ snapshots:
 
   '@acemir/cssom@0.9.33': {}
 
+  '@antonz/python-wasi@3.12.0': {}
+
   '@asamuzakjp/css-color@4.1.2':
     dependencies:
       '@csstools/css-calc': 3.4.3(@csstools/css-parser-algorithms@4.0.2(@csstools/css-tokenizer@4.0.2))(@csstools/css-tokenizer@4.0.2)
@@ -5553,6 +5567,8 @@ snapshots:
       tinyrainbow: 2.0.0
 
   '@xmldom/xmldom@0.8.15': {}
+
+  '@yowasp/clang@22.0.0-git20695-13': {}
 
   abbrev@4.0.0: {}
 

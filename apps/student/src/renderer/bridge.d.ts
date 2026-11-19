@@ -16,6 +16,10 @@ type BridgeResponse =
 
 interface Window {
   securelab?: {
+    /** Set by the browser version (src/renderer/web/bridge.ts); absent in the desktop app. */
+    kind?: "web";
+    /** Browser version: a session survives a reload of the tab. */
+    hasSession?(): boolean;
     request(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<BridgeResponse>;
     signOut(): Promise<void>;
     listDrafts(seatId: string): Promise<BridgeDraft[]>;
@@ -49,6 +53,7 @@ interface Window {
       apiUrl: string;
     }>;
     systemCheck(): Promise<{
+      web?: boolean;
       encryptionAvailable: boolean;
       draftsWritable: boolean;
       server: { reachable: boolean; latencyMs: number | null; clockSkewSeconds: number | null };

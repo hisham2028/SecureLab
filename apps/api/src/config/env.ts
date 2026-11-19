@@ -7,16 +7,21 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   /**
-   * Who runs student code. "judge0" (the default, and the only choice in production) uses the
-   * Judge0 sandbox. "local" runs it directly on this computer with no sandbox: SecureLab Lite,
-   * for trying the app out only.
+   * Who runs student code.
+   * - "judge0" (the default): the Judge0 sandbox, on a Linux host of its own (JUDGE0_URL).
+   * - "wasm": WebAssembly inside this server; nothing to install. For one small server, the web
+   *   version, and SecureLab Lite.
+   * - "local": directly on this computer with no sandbox, for trying the app out only.
    */
-  EXECUTION_PROVIDER: z.enum(["judge0", "local"]).default("judge0"),
+  EXECUTION_PROVIDER: z.enum(["judge0", "wasm", "local"]).default("judge0"),
   /** SecureLab Lite only: the compilers to use. Defaults: gcc, g++, python (Windows) or python3. */
   LOCAL_CC: z.string().optional(),
   LOCAL_CXX: z.string().optional(),
   LOCAL_PYTHON: z.string().optional(),
-  JUDGE0_URL: z.string().url(),
+  /** EXECUTION_PROVIDER=wasm: programs run at the same time (0: one fewer than the CPU cores). */
+  WASM_CONCURRENCY: z.coerce.number().int().min(0).max(64).default(0),
+  /** Required with EXECUTION_PROVIDER=judge0. */
+  JUDGE0_URL: z.union([z.literal(""), z.string().url()]).default(""),
   JUDGE0_AUTH_TOKEN: z.string().optional().default(""),
   CORS_ORIGINS: z.string().default(""),
   /** Express "trust proxy" (e.g. "1" or "loopback") when a reverse proxy terminates HTTPS. */
@@ -61,6 +66,11 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
+  if (env.EXECUTION_PROVIDER === "judge0" && !env.JUDGE0_URL) {
+    throw new Error(
+      "Invalid environment configuration:\n  JUDGE0_URL: required with EXECUTION_PROVIDER=judge0 (or set EXECUTION_PROVIDER=wasm)",
+    );
+  }
   if (env.NODE_ENV === "production") {
     const problems: string[] = [];
     if (EXAMPLE_SECRETS.includes(env.JWT_SECRET))
@@ -68,7 +78,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     if (!env.CORS_ORIGINS.trim()) problems.push("  CORS_ORIGINS: set the host dashboard's origin");
     if (env.JUDGE_WORKER_IN_API) problems.push("  JUDGE_WORKER_IN_API: run the worker separately");
     if (env.EXECUTION_PROVIDER === "local")
-      problems.push("  EXECUTION_PROVIDER: local has no sandbox; use judge0");
+      problems.push("  EXECUTION_PROVIDER: local has no sandbox; use judge0 or wasm");
     if (problems.length) {
       throw new Error(`Unsafe production configuration:\n${problems.join("\n")}`);
     }

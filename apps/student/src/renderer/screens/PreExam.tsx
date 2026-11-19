@@ -26,19 +26,25 @@ export function checkRows(c: Check): Row[] {
         : "Can't reach the exam server. Check the network, then check again.",
     },
     {
-      label: "Saving work on this computer",
+      label: c.web ? "Saving work in this browser" : "Saving work on this computer",
       level: c.draftsWritable ? "ok" : "fail",
       detail: c.draftsWritable
         ? "Working"
-        : "SecureLab can't save files on this computer. Tell the invigilator.",
+        : c.web
+          ? "This browser won't let SecureLab save. Leave private browsing, or tell the invigilator."
+          : "SecureLab can't save files on this computer. Tell the invigilator.",
     },
-    {
-      label: "Encrypted local copies",
-      level: c.encryptionAvailable ? "ok" : "warn",
-      detail: c.encryptionAvailable
-        ? "On"
-        : "Off on this computer. Your work is still saved; tell the invigilator.",
-    },
+    ...(c.web
+      ? []
+      : [
+          {
+            label: "Encrypted local copies",
+            level: (c.encryptionAvailable ? "ok" : "warn") as Level,
+            detail: c.encryptionAvailable
+              ? "On"
+              : "Off on this computer. Your work is still saved; tell the invigilator.",
+          },
+        ]),
     {
       label: "Secure connection",
       level: c.secureConnection ? "ok" : "warn",
@@ -182,7 +188,14 @@ export function PreExam({ overview, onOverview, onSignOut }: Props) {
               The timer comes from the exam server. Changing this computer&apos;s clock doesn&apos;t
               change it.
             </li>
-            {exam.lockScreen ? (
+            {exam.lockScreen && window.securelab?.kind === "web" ? (
+              <li>
+                <strong>This exam runs full screen.</strong> Leaving full screen or switching to
+                another tab or app is recorded, and the invigilator sees it. If you close this tab,
+                your latest saved code is submitted and you can only come back when the invigilator
+                lets you in.
+              </li>
+            ) : exam.lockScreen ? (
               <li>
                 <strong>This exam locks your screen.</strong> SecureLab stays full screen and you
                 can&apos;t switch to other apps. If you close it, your latest saved code is
