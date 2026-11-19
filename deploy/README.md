@@ -22,7 +22,8 @@ You need two Linux machines, both with Docker Engine 24 or later and the Compose
 **Only one machine, or only Windows?** For a pilot, SecureLab and Judge0 can share one Ubuntu
 24.04 machine, including an Ubuntu VM on a Windows PC: `deploy/one-machine.sh` sets everything up
 (with `one-machine.yml` and `judge0/one-machine.yml`, which keep Judge0 off the network). Follow
-the [Windows server guide](../docs/guides/windows-server.md). The rest of this page describes the
+the [Windows server guide](../docs/guides/windows-server.md), or the
+[one-PC Hyper-V guide](../docs/guides/one-pc-hyper-v.md) for exact Hyper-V steps. The rest of this page describes the
 two-machine setup.
 
 The roles of each part and why Judge0 lives apart are in
