@@ -1,40 +1,35 @@
-# SecureLab Lite: try SecureLab on your Windows PC
+# SecureLab Lite: the web version on one PC
 
-Lite runs the real SecureLab on one computer, with no Docker, no virtual machine and no Judge0.
-It includes the teacher dashboard in your browser, the student app, a sample exam and sample
-students. It takes about **1.6 GB** in total. Use it to look around, try the student experience
-and show colleagues.
+Lite runs the real SecureLab on one Windows (or Mac/Linux) computer, with no Docker and no
+Judge0. That computer is the exam server. Students take the exam **in a web browser**, on the
+same computer or on any computer on the same network (lab LAN or Wi-Fi): they open a link, with
+nothing to install.
 
-> **Not for real exams.** Lite runs students' code directly on your PC, with no sandbox. A
-> program could read your files or use the network. For real exams, use the full setup
-> ([deployment guide](../deploy/README.md)), where Judge0 runs code in a locked sandbox. The
-> server refuses to start in Lite mode when `NODE_ENV=production`.
+Students' Python, C and C++ code runs as **WebAssembly inside the server**, so you don't install
+Python or a compiler either. A program can only read its input and print its output: no files,
+no network, limited memory and time.
 
-## What to install (once)
+## What to install on the server PC (once)
 
-| Program                         | Size         | Get it from                                               | Notes                                                                                                                                                                                        |
-| ------------------------------- | ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node.js 22 LTS**              | about 100 MB | <https://nodejs.org>                                      | Use the Windows installer and accept the defaults.                                                                                                                                           |
-| **PostgreSQL 16**               | about 300 MB | <https://www.postgresql.org/download/windows/>            | In the installer, untick **pgAdmin** and **Stack Builder**. **Write down the password** it asks for. Keep port 5432.                                                                         |
-| **Python 3**                    | about 100 MB | <https://www.python.org/downloads/>                       | Tick **Add python.exe to PATH** on the first screen.                                                                                                                                         |
-| **A C/C++ compiler** (optional) | about 300 MB | [w64devkit](https://github.com/skeeto/w64devkit/releases) | Unpack it to `C:\w64devkit` and add `C:\w64devkit\bin` to PATH (Start → "Edit the system environment variables" → Environment Variables → Path → New). Skip it if Python answers are enough. |
-| **SecureLab** itself            | about 900 MB | this repository                                           | Setup downloads its parts.                                                                                                                                                                   |
+| Program                     | Get it from                                    | Notes                                                                                                                |
+| --------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Node.js 22.13 or newer**  | <https://nodejs.org> (the LTS)                 | Use the Windows installer and accept the defaults.                                                                   |
+| **PostgreSQL 16**           | <https://www.postgresql.org/download/windows/> | In the installer, untick **pgAdmin** and **Stack Builder**. **Write down the password** it asks for. Keep port 5432. |
+| **SecureLab** (this folder) | the zip, or the GitHub repository              | Unzip it, for example to `C:\SecureLab`.                                                                             |
 
-Then get SecureLab: on <https://github.com/hisham2028/SecureLab>, press **Code → Download ZIP**,
-and unzip it, for example to `C:\SecureLab`. If you have Git, `git clone` works too.
+Student computers need only a web browser (Chrome, Edge or Firefox).
 
 ## Set up (once, about 5 minutes)
 
-Open **PowerShell** in the SecureLab folder. In File Explorer, open the folder, then type
+Open **PowerShell** in the SecureLab folder: in File Explorer, open the folder, type
 `powershell` in the address bar and press Enter. Then run:
 
 ```powershell
 node lite/securelab-lite.mjs setup
 ```
 
-It checks which languages will work, asks for the PostgreSQL password you wrote down, downloads
-and builds SecureLab's parts, creates a database called `securelab_lite`, and creates an admin
-account.
+It asks for the PostgreSQL password you wrote down, downloads and builds SecureLab's parts
+(about 1 GB), creates a database called `securelab_lite`, and creates an admin account.
 
 ## Start
 
@@ -42,59 +37,65 @@ account.
 node lite/securelab-lite.mjs start
 ```
 
-This starts the server and opens two windows:
+It prints, and opens in your browser:
 
-- **The teacher dashboard** in your browser, at <http://localhost:8080>. The email and password
-  are printed in PowerShell.
-- **The student app.**
+- **The teacher dashboard**: <http://localhost:8080>, with the email and password.
+- **The student page**: <http://localhost:8080/student/> on this computer, and links such as
+  `http://192.168.1.20:8080/student/` for the other computers on the network. Give students
+  that link (write it on the board).
 
-The first time, it also creates a sample exam, **SecureLab Lite demo**, with two questions and
-three students. PowerShell prints their exam code, student IDs and PINs, which are also saved
-in `lite/demo-students.txt`.
+The first time Windows asks whether Node.js may use the network: tick **Private networks** and
+press **Allow**. Without that, other computers can't open the student page.
+
+The first time, Lite also creates a sample exam, **SecureLab Lite demo**, with two questions and
+three students. PowerShell prints their exam code, student IDs and PINs (also saved in
+`lite/demo-students.txt`).
 
 **Try a whole exam:**
 
 1. In the dashboard, open **SecureLab Lite demo** and press **Start exam**.
-2. In the student app, sign in with the exam code, a student ID and its PIN.
-3. Write an answer, press **Run** to try it, then **Submit**. With verdicts on, the student
-   sees "Accepted" or how many tests passed within seconds.
+2. On the student page, sign in with the exam code, a student ID and its PIN, tick the box and
+   press **Start exam**.
+3. Write an answer, press **Run** to try it, then **Submit**.
 4. In the dashboard, watch the **Live** tab, open the student's seat, and look at **Results**.
 
-The demo exam locks the student's screen, so on one PC the student app covers everything,
-including the dashboard, until the student finishes. To get out early, press Alt+F4 and choose
-**Leave the exam**: that submits the student's code and blocks them, which you can then undo in
-the dashboard with **Unblock**. For your own exams you can turn the lock off under **Edit
-settings → Lock students' screens**.
+For your own exams: **Exams → New exam**, add questions, import students from a CSV (the
+dashboard shows each student's PIN), then **Publish** and **Start exam**.
 
-To be a second student at the same time, run this in another PowerShell window:
+**Stop** with Ctrl+C in the PowerShell window. Exams and results stay in the database for next
+time.
 
-```powershell
-node lite/securelab-lite.mjs student
-```
+## Locked-screen exams in a browser
 
-**Stop** with Ctrl+C in the PowerShell window that is running `start`. Your exams and results
-stay in the database for next time.
+A web page can't stop students from switching apps the way the desktop app can. With **Lock
+students' screens** on (the default):
+
+- The exam opens full screen. If a student leaves full screen, the exam is covered until they
+  return, and switching away is recorded in the dashboard's **Live** tab.
+- Closing the tab (or the browser) submits the student's latest saved code and blocks the seat.
+  They can only come back after you press **Unblock** in the dashboard. Reloading the page
+  counts as closing it.
+
+For exams where switching apps must be impossible, use the desktop student app on lab PCs
+(`node lite/securelab-lite.mjs student` opens one here; see the full version's guides).
 
 ## If something doesn't work
 
-| Problem                                | Fix                                                                                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `node` is not recognized               | Install Node.js, then open a **new** PowerShell window.                                                                     |
-| "The API stopped" right after start    | Usually the PostgreSQL password is wrong. Delete `lite/.env` and run setup again. The full error is in `lite/logs/api.log`. |
-| C or C++ answers show "couldn't grade" | The compiler isn't on PATH. Install w64devkit as above, open a new PowerShell window, and run `gcc --version` to check.     |
-| Python answers show "couldn't grade"   | Reinstall Python with **Add python.exe to PATH** ticked.                                                                    |
-| Not sure which languages will work     | Run `node lite/securelab-lite.mjs check`. It only checks Python and the C/C++ compiler, and changes nothing.                |
-| Port 8080 or 3000 is busy              | Close the other program using it, or restart the PC.                                                                        |
+| Problem                                     | Fix                                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `node` is not recognized                    | Install Node.js, then open a **new** PowerShell window.                                                                     |
+| "Node.js 22.13 or newer is needed"          | Install the current LTS from nodejs.org.                                                                                    |
+| "The API stopped" right after start         | Usually the PostgreSQL password is wrong. Delete `lite/.env` and run setup again. The full error is in `lite/logs/api.log`. |
+| Other computers can't open the student page | Allow Node.js through Windows Firewall (Start → "Allow an app through Windows Firewall" → Node.js → Private). Same network? |
+| Port 8080 or 3000 is busy                   | Close the other program using it, or restart the PC.                                                                        |
 
-## What's different from the full version
+## Good to know
 
-|                               | Lite                           | Full version                                                  |
-| ----------------------------- | ------------------------------ | ------------------------------------------------------------- |
-| Runs on                       | one PC, Windows/Mac/Linux      | Linux servers (or an Ubuntu VM on Windows)                    |
-| Student code runs             | directly on the PC, no sandbox | in Judge0's sandbox: no network, limited memory and processes |
-| Memory limit per answer       | not enforced                   | enforced                                                      |
-| HTTPS, backups, retention job | no                             | yes                                                           |
-| Size                          | about 1.6 GB                   | about 30 GB                                                   |
-
-Everything else is the same code: the dashboard, the student app, grading, marks, results and
-monitoring. AI help is off in Lite.
+- The first C or C++ answer after starting takes a few seconds longer: the compiler loads once.
+- Python runs slower than a normal Python install (several times, for heavy loops). Typical exam
+  answers finish well within a second; give heavy questions a generous time limit.
+- In C++, a `throw` ends the program (a `catch` never runs); everything else in C++17 works,
+  including `<bits/stdc++.h>`.
+- The connection is plain HTTP on your network. For exams over the internet, use HTTPS: see
+  the full version's [deployment guide](../deploy/README.md).
+- AI help is off in Lite.

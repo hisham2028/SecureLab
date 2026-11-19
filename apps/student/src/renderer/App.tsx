@@ -65,6 +65,11 @@ export function App() {
     }
   }, []);
 
+  // Browser version: a reload keeps the session, so go straight back to the exam.
+  useEffect(() => {
+    if (window.securelab?.hasSession?.()) void load();
+  }, [load]);
+
   const onOverview = useCallback((o: StudentOverview) => {
     setOverview(o);
     // Entering moves the student from the pre-exam page into the exam.

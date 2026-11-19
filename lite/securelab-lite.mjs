@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// SecureLab Lite: try SecureLab on one Windows (or Mac/Linux) computer, without Docker or Judge0.
+// SecureLab Lite: SecureLab on one Windows (or Mac/Linux) computer, without Docker or Judge0.
 //
 //   node lite/securelab-lite.mjs setup     once: install, build, database, admin account
-//   node lite/securelab-lite.mjs start     server + dashboard + a sample exam + the student app
-//   node lite/securelab-lite.mjs student   one more student app window
-//   node lite/securelab-lite.mjs check     only check which languages will work
+//   node lite/securelab-lite.mjs start     server + dashboard + student web page + a sample exam
+//   node lite/securelab-lite.mjs student   a desktop student app window (optional)
+//   node lite/securelab-lite.mjs check     only check this computer's Node.js
 //
-// Student code runs directly on this computer with no sandbox. Use Lite to look around and try
-// things with colleagues, never for a real exam. Guide: lite/README.md.
+// Students open the student page in a browser, on this computer or any computer on the same
+// network. Their code runs as WebAssembly inside the server (no Python or compiler to install).
+// Guide: lite/README.md.
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -22,6 +23,7 @@ import {
 import http from "node:http";
 import net from "node:net";
 import { createRequire } from "node:module";
+import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -63,7 +65,7 @@ function readEnv() {
   return env;
 }
 
-/** Everything the API needs, for Lite: local runner, grading inside the API, no AI. */
+/** Everything the API needs, for Lite: WebAssembly runner, grading inside the API, no AI. */
 function apiEnv(lite) {
   return {
     ...process.env,
@@ -71,71 +73,27 @@ function apiEnv(lite) {
     PORT: String(API_PORT),
     DATABASE_URL: lite.DATABASE_URL,
     JWT_SECRET: lite.JWT_SECRET,
-    EXECUTION_PROVIDER: "local",
-    JUDGE0_URL: "http://127.0.0.1:2358", // unused with the local runner
+    EXECUTION_PROVIDER: "wasm",
     JUDGE_WORKER_IN_API: "true",
-    JUDGE_WORKER_CONCURRENCY: "2",
+    JUDGE_WORKER_CONCURRENCY: "4",
     CORS_ORIGINS: `http://localhost:${DASHBOARD_PORT}`,
-    ...(lite.LOCAL_PYTHON && { LOCAL_PYTHON: lite.LOCAL_PYTHON }),
-    ...(lite.LOCAL_CC && { LOCAL_CC: lite.LOCAL_CC }),
-    ...(lite.LOCAL_CXX && { LOCAL_CXX: lite.LOCAL_CXX }),
+    // Everything reaches the API through Lite's own server, which says who the client is.
+    TRUST_PROXY: "loopback",
   };
 }
 
 // ---------------------------------------------------------------- setup
 
-/**
- * On Windows, the full path of a program, found the way PowerShell and cmd find it. Node can miss
- * programs they find (seen with Python's py.exe launcher), so Lite always runs tools by full path.
- */
-function whereExe(name) {
-  const where = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "where.exe");
-  const r = spawnSync(where, [name], { encoding: "utf8" });
-  if (r.status !== 0) return [];
-  // .exe only: .bat/.cmd shims can't be started without a shell.
-  return r.stdout
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => /\.exe$/i.test(l));
-}
-
-/** Candidate commands for a tool: full paths on Windows, plain names elsewhere. */
-function candidates(names) {
-  return IS_WINDOWS ? names.flatMap(whereExe) : names;
-}
-
-function findPython() {
-  // On Windows, py.exe (the Python launcher) runs the newest Python 3.
-  for (const cmd of candidates(IS_WINDOWS ? ["python", "py", "python3"] : ["python3", "python"])) {
-    // No shell: cmd.exe would split the -c program at its spaces.
-    const r = spawnSync(cmd, ["-c", "import sys; print(sys.version_info[0])"], {
-      encoding: "utf8",
-    });
-    // Windows ships a "python" that only opens the Microsoft Store; it prints nothing useful.
-    if (r.status === 0 && r.stdout.trim() === "3") return cmd;
-  }
-  return null;
-}
-
-function findCompiler(name) {
-  return candidates([name]).find((cmd) => spawnSync(cmd, ["--version"]).status === 0) ?? null;
-}
-
 function checkTools() {
-  say("Checking what's installed");
-  const major = Number(process.versions.node.split(".")[0]);
-  if (major < 22) die(`Node.js 22 or newer is needed; this is ${process.versions.node}.`);
-  console.log(`Node.js ${process.versions.node}: OK`);
-  const tools = { python: findPython(), cc: findCompiler("gcc"), cxx: findCompiler("g++") };
-  const show = (found, what) =>
-    found ? `OK (${found})` : `not found, so ${what} answers can't run`;
-  console.log(`Python 3: ${show(tools.python, "Python")}`);
-  console.log(`C (gcc): ${show(tools.cc, "C")}`);
-  console.log(`C++ (g++): ${show(tools.cxx, "C++")}`);
-  if (!tools.python && !tools.cc && !tools.cxx) {
-    die("Install at least Python or a C/C++ compiler (lite/README.md).");
+  say("Checking this computer");
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  if (major < 22 || (major === 22 && minor < 13)) {
+    die(
+      `Node.js 22.13 or newer is needed; this is ${process.versions.node}. Install the LTS from nodejs.org.`,
+    );
   }
-  return tools;
+  console.log(`Node.js ${process.versions.node}: OK`);
+  console.log("Python, C and C++ run inside SecureLab (WebAssembly): nothing else to install.");
 }
 
 /** True if something (PostgreSQL, we hope) accepts connections on this port. */
@@ -153,7 +111,7 @@ function portOpen(port) {
 }
 
 async function setup() {
-  const tools = checkTools();
+  checkTools();
 
   say("Database");
   let lite = existsSync(ENV_FILE) ? readEnv() : null;
@@ -181,15 +139,8 @@ async function setup() {
       ADMIN_PASSWORD: `lite-${randomBytes(6).toString("hex")}`,
     };
   }
-  // The exact programs found above, so the API runs the same ones.
-  for (const [key, found] of [
-    ["LOCAL_PYTHON", tools.python],
-    ["LOCAL_CC", tools.cc],
-    ["LOCAL_CXX", tools.cxx],
-  ]) {
-    if (found) lite[key] = found;
-    else delete lite[key];
-  }
+  // Settings of older Lite versions, which ran code with Python and gcc installed on this PC.
+  for (const key of ["LOCAL_PYTHON", "LOCAL_CC", "LOCAL_CXX"]) delete lite[key];
   const dbPort = new URL(lite.DATABASE_URL).port || "5432";
   if (!(await portOpen(dbPort))) {
     die(
@@ -262,17 +213,42 @@ const CONTENT_TYPES = {
   ".json": "application/json",
 };
 
-/** The teacher dashboard: built files, with /api passed on to the API (as Caddy does). */
-function startDashboard() {
-  const dist = path.join(ROOT, "apps", "host", "dist");
-  if (!existsSync(path.join(dist, "index.html")))
-    die("The dashboard isn't built. Run setup again.");
+/** Built files of a web app, with its fallback page for paths that aren't files. */
+function sendFile(res, dist, rel, fallback) {
+  let file = path.join(dist, path.normalize(decodeURIComponent(rel)));
+  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) {
+    file = path.join(dist, fallback);
+  }
+  res.writeHead(200, {
+    "content-type": CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream",
+    "x-content-type-options": "nosniff",
+    ...(path.extname(file) === ".html" && { "cache-control": "no-cache" }),
+  });
+  createReadStream(file).pipe(res);
+}
+
+/**
+ * One web server for everything, on port 8080 of every network card: the teacher dashboard at
+ * /, the student page at /student/, and /api passed on to the API (as Caddy does in the full
+ * setup).
+ */
+function startWebServer() {
+  const dashboard = path.join(ROOT, "apps", "host", "dist");
+  const student = path.join(ROOT, "apps", "student", "dist", "web");
+  if (
+    !existsSync(path.join(dashboard, "index.html")) ||
+    !existsSync(path.join(student, "web.html"))
+  )
+    die("SecureLab isn't built. Run setup again.");
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     if (url.pathname.startsWith("/api/")) {
+      const headers = { ...req.headers, host: `127.0.0.1:${API_PORT}` };
+      // Replaced, never appended: a client can't pretend to be someone else.
+      headers["x-forwarded-for"] = req.socket.remoteAddress ?? "";
       const upstream = http.request(
         `${API}${url.pathname.slice(4)}${url.search}`,
-        { method: req.method, headers: { ...req.headers, host: `127.0.0.1:${API_PORT}` } },
+        { method: req.method, headers },
         (up) => {
           res.writeHead(up.statusCode ?? 502, up.headers);
           up.pipe(res);
@@ -285,16 +261,18 @@ function startDashboard() {
       req.pipe(upstream);
       return;
     }
-    let file = path.join(dist, path.normalize(decodeURIComponent(url.pathname)));
-    if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) {
-      file = path.join(dist, "index.html");
+    if (url.pathname === "/student") {
+      res.writeHead(301, { location: "/student/" });
+      res.end();
+      return;
     }
-    res.writeHead(200, {
-      "content-type": CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream",
-    });
-    createReadStream(file).pipe(res);
+    if (url.pathname.startsWith("/student/")) {
+      sendFile(res, student, url.pathname.slice("/student/".length), "web.html");
+      return;
+    }
+    sendFile(res, dashboard, url.pathname, "index.html");
   });
-  server.listen(DASHBOARD_PORT, "127.0.0.1");
+  server.listen(DASHBOARD_PORT, "0.0.0.0");
   server.on("error", (e) =>
     die(`Port ${DASHBOARD_PORT} is busy (${e.message}). Close what uses it.`),
   );
@@ -480,7 +458,7 @@ async function start() {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   await waitForApi(api);
-  const dashboard = startDashboard();
+  const dashboard = startWebServer();
 
   say("Sample exam");
   try {
@@ -490,25 +468,39 @@ async function start() {
   }
 
   const url = `http://localhost:${DASHBOARD_PORT}/`;
+  const studentUrl = `http://localhost:${DASHBOARD_PORT}/student/`;
   say("Running");
   console.log(`Teacher dashboard:  ${url}`);
   console.log(`  Email:            ${lite.ADMIN_EMAIL}`);
   console.log(`  Password:         ${lite.ADMIN_PASSWORD}`);
+  console.log(`\nStudent page on this computer:  ${studentUrl}`);
+  const lan = lanAddresses();
+  if (lan.length) {
+    console.log("Student page for other computers on this network (one of these):");
+    for (const ip of lan) console.log(`  http://${ip}:${DASHBOARD_PORT}/student/`);
+  }
   if (existsSync(STUDENTS_FILE)) {
     console.log(`\nStudents (also in ${STUDENTS_FILE}):`);
     console.log(readFileSync(STUDENTS_FILE, "utf8").replace(/^/gm, "  "));
   }
   console.log("Open the exam in the dashboard and press Start exam, then sign in as a student.");
-  console.log("Another student window:  node lite/securelab-lite.mjs student");
   console.log("Stop everything: press Ctrl+C here.");
   if (!process.argv.includes("--no-open")) {
     openBrowser(url);
-    startStudentApp();
+    openBrowser(studentUrl);
   }
   api.on("exit", (code) => {
     dashboard.close();
     die(`The API stopped (exit ${code}). See ${path.join(LOGS, "api.log")}.`);
   });
+}
+
+/** This computer's IPv4 addresses on its networks (Wi-Fi, Ethernet), for students' browsers. */
+function lanAddresses() {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((a) => a && a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254."))
+    .map((a) => a.address);
 }
 
 // ---------------------------------------------------------------- main
